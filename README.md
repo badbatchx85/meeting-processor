@@ -84,6 +84,7 @@ Depois escolha **um** provedor e preencha a chave no `.env`:
 | **OpenAI** | `openai` | `OPENAI_API_KEY` | <https://platform.openai.com/> |
 | **Gemini** | `gemini` | `GEMINI_API_KEY` | <https://aistudio.google.com/apikey> |
 | **Ollama (local, grátis)** | `local` | — | <https://ollama.com/download> |
+| **Sem IA (só transcrição)** | `none` | — | não precisa de nada |
 
 Exemplo (OpenAI):
 ```dotenv

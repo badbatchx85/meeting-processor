@@ -60,7 +60,7 @@
       </p>
 
       <div class="segmented flex-wrap">
-        {% for p, lbl in [('anthropic','Claude'), ('openai','OpenAI'), ('gemini','Gemini'), ('local','Ollama')] %}
+        {% for p, lbl in [('anthropic','Claude'), ('openai','OpenAI'), ('gemini','Gemini'), ('local','Ollama'), ('none','Sem IA')] %}
         <form hx-post="/actions/llm-provider" hx-target="#controls" hx-swap="outerHTML">
           <input type="hidden" name="provider" value="{{ p }}" />
           <button type="submit" class="{% if config.llm_provider == p or (p == 'local' and config.llm_provider == 'ollama') %}active{% endif %}">
@@ -86,6 +86,8 @@
           {% if not config.gemini_key_set %}
             <div class="text-err">⚠ GEMINI_API_KEY não configurada</div>
           {% endif %}
+        {% elif config.llm_provider == 'none' %}
+          <div>Sem IA — só transcreve a reunião (sem resumo, nota, kanban ou wiki).</div>
         {% else %}
           <div>modelo: <span class="font-mono">{{ config.ollama_model }}</span></div>
           <div>requer Ollama em <span class="font-mono">{{ config.ollama_base_url|default('localhost:11434') }}</span></div>

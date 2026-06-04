@@ -555,6 +555,12 @@ def MeetingSummarizer(config: Settings) -> SummarizerProtocol:  # noqa: N802 (fa
     """
     provider = (config.llm_provider or "anthropic").lower().strip()
 
+    if provider == "none":
+        raise RuntimeError(
+            "llm_provider='none' não usa LLM (modo só transcrição). "
+            "O resumo não deveria ter sido chamado."
+        )
+
     if provider in ("local", "ollama"):
         logger.info(
             "LLM provider: ollama (modelo=%s, base_url=%s)",

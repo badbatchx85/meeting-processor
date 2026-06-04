@@ -48,6 +48,7 @@ class Settings(BaseModel):
     #   "openai"    -> OpenAI e compatíveis (requer OPENAI_API_KEY)
     #   "gemini"    -> Google Gemini (requer GEMINI_API_KEY)
     #   "local" / "ollama" -> Ollama local (requer servidor rodando)
+    #   "none"      -> não usa LLM: só transcreve (sem resumo/nota/kanban/wiki)
     llm_provider: str = "anthropic"
 
     # Claude API
@@ -139,9 +140,10 @@ class Settings(BaseModel):
     def steps(self) -> dict[str, bool]:
         """Etapas efetivas, já resolvendo dependências.
 
-        Nota/Kanban/Wiki só fazem sentido com o resumo ligado.
+        Nota/Kanban/Wiki só fazem sentido com o resumo ligado. Com
+        ``llm_provider="none"`` nenhuma LLM roda — só a transcrição.
         """
-        summary = self.enable_summary
+        summary = self.enable_summary and (self.llm_provider or "").lower() != "none"
         return {
             "summary": summary,
             "note": summary and self.enable_note,

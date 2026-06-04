@@ -31,7 +31,7 @@ whisper_initial_prompt: "Transcrição de reunião em português brasileiro."
 # Provedor de LLM (resumo da reunião)
 # ----------------------------------------------------------
 # Valores: "anthropic" (Claude), "openai" (OpenAI/compatíveis),
-#          "gemini" (Google) ou "local" (Ollama).
+#          "gemini" (Google), "local" (Ollama) ou "none" (sem IA: só transcreve).
 # Também alterável pela interface web. Env var: MEETING_LLM_PROVIDER.
 # As chaves de API ficam no .env (nunca no config.yaml).
 llm_provider: "anthropic"

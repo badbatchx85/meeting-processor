@@ -425,6 +425,7 @@ def create_app(config: Settings | None = None) -> FastAPI:
             "gemini": "Gemini",
             "local": "Ollama (local)",
             "ollama": "Ollama (local)",
+            "none": "Sem IA (só transcrição)",
         }
         return labels.get(config.llm_provider, config.llm_provider)
 

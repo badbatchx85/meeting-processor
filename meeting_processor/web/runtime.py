@@ -151,7 +151,7 @@ def get_supervisor(project_root: Path) -> WatcherSupervisor:
 # ---------------------------------------------------------------------------
 
 
-VALID_PROVIDERS = ("anthropic", "openai", "gemini", "local")
+VALID_PROVIDERS = ("anthropic", "openai", "gemini", "local", "none")
 
 
 def _env_path(project_root: Path) -> Path:

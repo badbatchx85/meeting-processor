@@ -25,7 +25,9 @@ class MeetingPipeline:
     def __init__(self, config: Settings):
         self.config = config
         self.transcriber = WhisperTranscriber(config)
-        self.summarizer = MeetingSummarizer(config)
+        # O summarizer é criado sob demanda (lazy): no modo só transcrição
+        # ou com llm_provider="none" nenhuma LLM é instanciada.
+        self.summarizer = None
         self.note_generator = NoteGenerator(config)
         self.kanban = KanbanManager(config)
         self.wiki = WikiIntegrator(config)
@@ -93,6 +95,8 @@ class MeetingPipeline:
                 job.advance("summary", f"{provider_label}: {model_label}")
                 job.set_progress("summary", 10, f"Enviando ao {provider_label}...")
                 self.dashboard.update(job)
+                if self.summarizer is None:
+                    self.summarizer = MeetingSummarizer(self.config)
                 summary = self.summarizer.summarize(transcript, video_path.name)
                 job.set_progress("summary", 100, f"{len(summary.action_items)} tarefas, {len(summary.participants)} participantes")
                 self.dashboard.update(job)
