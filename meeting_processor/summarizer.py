@@ -1,13 +1,17 @@
-"""Resumo de reuniões via LLM (Claude API ou modelo local Ollama).
+"""Resumo de reuniões via LLM (Claude, OpenAI, Gemini ou Ollama local).
 
 Este módulo expõe:
 
 - ``MeetingSummarizer``: factory pública. Retorna o provedor correto
-  com base em ``config.llm_provider`` (``anthropic`` ou ``local``).
-- ``AnthropicSummarizer``: provedor que chama a Claude API.
-- ``OllamaSummarizer``: provedor que chama um servidor Ollama local.
+  com base em ``config.llm_provider`` (``anthropic``, ``openai``,
+  ``gemini`` ou ``local``).
+- ``AnthropicSummarizer``: Claude API.
+- ``OpenAISummarizer``: OpenAI e qualquer serviço compatível (OpenRouter,
+  Groq, DeepSeek, xAI, Azure...) via ``openai_base_url``.
+- ``GeminiSummarizer``: Google Gemini (API nativa).
+- ``OllamaSummarizer``: servidor Ollama local.
 
-Os dois provedores compartilham o mesmo system prompt e a mesma rotina de
+Todos os provedores compartilham o mesmo system prompt e a mesma rotina de
 parsing, então a saída é sempre um ``MeetingSummary`` com o mesmo formato.
 """
 
@@ -358,6 +362,186 @@ class OllamaSummarizer(_BaseSummarizer):
 
 
 # ---------------------------------------------------------------------------
+# Provedor: OpenAI e compatíveis (OpenRouter, Groq, DeepSeek, xAI, Azure...)
+# ---------------------------------------------------------------------------
+
+
+class OpenAISummarizer(_BaseSummarizer):
+    """Resume via API compatível com a OpenAI (``/chat/completions``).
+
+    O mesmo provedor cobre a OpenAI e qualquer serviço compatível: basta
+    apontar ``openai_base_url`` e definir a chave correspondente. Assim,
+    modelos novos do mercado funcionam sem mudança de código.
+    """
+
+    provider_name = "openai"
+
+    def __init__(self, config: Settings):
+        super().__init__(config)
+        if not config.openai_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY não definido. Configure no .env "
+                "(ou troque o provedor de LLM)."
+            )
+        self.base_url = config.openai_base_url.rstrip("/")
+        self.model = config.openai_model
+        self.api_key = config.openai_api_key
+        self.timeout = config.openai_request_timeout
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, retries: int = 3) -> str:
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        use_json_mode = True
+        last_err: Exception | None = None
+
+        for attempt in range(retries):
+            payload: dict = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            }
+            if use_json_mode:
+                payload["response_format"] = {"type": "json_object"}
+
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    resp = client.post(url, headers=headers, json=payload)
+                    if resp.status_code == 401:
+                        raise RuntimeError(
+                            "Chave da API inválida (HTTP 401). "
+                            "Verifique OPENAI_API_KEY no .env."
+                        )
+                    # Alguns endpoints compatíveis não suportam response_format.
+                    if resp.status_code == 400 and use_json_mode:
+                        logger.warning(
+                            "Endpoint recusou response_format; tentando sem JSON mode."
+                        )
+                        use_json_mode = False
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                choices = data.get("choices", [])
+                if not choices:
+                    raise RuntimeError(
+                        f"Resposta inesperada da API: {str(data)[:200]}"
+                    )
+                return choices[0].get("message", {}).get("content", "")
+
+            except httpx.ConnectError as e:
+                raise RuntimeError(
+                    f"Não foi possível conectar a {self.base_url}. "
+                    f"Verifique openai_base_url."
+                ) from e
+            except httpx.HTTPError as e:
+                last_err = e
+                if attempt < retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning(
+                        "Erro HTTP na API OpenAI (%s). Tentando novamente em %ds...",
+                        e,
+                        wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    raise RuntimeError(
+                        f"Falha ao chamar a API OpenAI após {retries} tentativas: {e}"
+                    ) from e
+
+        raise RuntimeError(f"Falha ao chamar a API OpenAI: {last_err}")
+
+
+# ---------------------------------------------------------------------------
+# Provedor: Google Gemini (API nativa)
+# ---------------------------------------------------------------------------
+
+
+class GeminiSummarizer(_BaseSummarizer):
+    """Resume via API nativa do Google Gemini (``generateContent``)."""
+
+    provider_name = "gemini"
+
+    def __init__(self, config: Settings):
+        super().__init__(config)
+        if not config.gemini_api_key:
+            raise RuntimeError(
+                "GEMINI_API_KEY não definido. Configure no .env "
+                "(ou troque o provedor de LLM)."
+            )
+        self.base_url = config.gemini_base_url.rstrip("/")
+        self.model = config.gemini_model
+        self.api_key = config.gemini_api_key
+        self.timeout = config.gemini_request_timeout
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, retries: int = 3) -> str:
+        url = f"{self.base_url}/v1beta/models/{self.model}:generateContent"
+        payload = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"},
+        }
+        last_err: Exception | None = None
+
+        for attempt in range(retries):
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    resp = client.post(
+                        url, params={"key": self.api_key}, json=payload
+                    )
+                    if resp.status_code in (401, 403):
+                        raise RuntimeError(
+                            "Chave da API Gemini inválida. "
+                            "Verifique GEMINI_API_KEY no .env."
+                        )
+                    if resp.status_code == 404:
+                        raise RuntimeError(
+                            f"Modelo Gemini '{self.model}' não encontrado (HTTP 404). "
+                            f"Confira gemini_model."
+                        )
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    raise RuntimeError(
+                        f"Resposta inesperada do Gemini: {str(data)[:200]}"
+                    )
+                parts = candidates[0].get("content", {}).get("parts", [])
+                text = "".join(p.get("text", "") for p in parts)
+                if not text:
+                    raise RuntimeError(
+                        f"Gemini não retornou texto: {str(data)[:200]}"
+                    )
+                return text
+
+            except httpx.ConnectError as e:
+                raise RuntimeError(
+                    f"Não foi possível conectar ao Gemini em {self.base_url}."
+                ) from e
+            except httpx.HTTPError as e:
+                last_err = e
+                if attempt < retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning(
+                        "Erro HTTP no Gemini (%s). Tentando novamente em %ds...",
+                        e,
+                        wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    raise RuntimeError(
+                        f"Falha ao chamar o Gemini após {retries} tentativas: {e}"
+                    ) from e
+
+        raise RuntimeError(f"Falha ao chamar o Gemini: {last_err}")
+
+
+# ---------------------------------------------------------------------------
 # Factory pública
 # ---------------------------------------------------------------------------
 
@@ -383,15 +567,29 @@ def MeetingSummarizer(config: Settings) -> SummarizerProtocol:  # noqa: N802 (fa
         logger.info("LLM provider: anthropic (modelo=%s)", config.anthropic_model)
         return AnthropicSummarizer(config)
 
+    if provider == "openai":
+        logger.info(
+            "LLM provider: openai (modelo=%s, base_url=%s)",
+            config.openai_model,
+            config.openai_base_url,
+        )
+        return OpenAISummarizer(config)
+
+    if provider == "gemini":
+        logger.info("LLM provider: gemini (modelo=%s)", config.gemini_model)
+        return GeminiSummarizer(config)
+
     raise ValueError(
-        f"llm_provider desconhecido: '{provider}'. "
-        f"Valores válidos: 'anthropic', 'local' (alias 'ollama')."
+        f"llm_provider desconhecido: '{provider}'. Valores válidos: "
+        f"'anthropic', 'openai', 'gemini', 'local' (alias 'ollama')."
     )
 
 
 __all__ = [
     "MeetingSummarizer",
     "AnthropicSummarizer",
+    "OpenAISummarizer",
+    "GeminiSummarizer",
     "OllamaSummarizer",
     "SummarizerProtocol",
     "SYSTEM_PROMPT",

@@ -59,19 +59,15 @@
         <span class="font-mono">.env</span>.
       </p>
 
-      <div class="segmented">
+      <div class="segmented flex-wrap">
+        {% for p, lbl in [('anthropic','Claude'), ('openai','OpenAI'), ('gemini','Gemini'), ('local','Ollama')] %}
         <form hx-post="/actions/llm-provider" hx-target="#controls" hx-swap="outerHTML">
-          <input type="hidden" name="provider" value="anthropic" />
-          <button type="submit" class="{% if config.llm_provider == 'anthropic' %}active{% endif %}">
-            Claude API
+          <input type="hidden" name="provider" value="{{ p }}" />
+          <button type="submit" class="{% if config.llm_provider == p or (p == 'local' and config.llm_provider == 'ollama') %}active{% endif %}">
+            {{ lbl }}
           </button>
         </form>
-        <form hx-post="/actions/llm-provider" hx-target="#controls" hx-swap="outerHTML">
-          <input type="hidden" name="provider" value="local" />
-          <button type="submit" class="{% if config.llm_provider in ['local','ollama'] %}active{% endif %}">
-            Ollama (local)
-          </button>
-        </form>
+        {% endfor %}
       </div>
 
       <div class="mt-3 text-xs text-mute space-y-0.5">
@@ -79,6 +75,16 @@
           <div>modelo: <span class="font-mono">{{ config.anthropic_model }}</span></div>
           {% if not config.anthropic_key_set %}
             <div class="text-err">⚠ ANTHROPIC_API_KEY não configurada</div>
+          {% endif %}
+        {% elif config.llm_provider == 'openai' %}
+          <div>modelo: <span class="font-mono">{{ config.openai_model }}</span></div>
+          {% if not config.openai_key_set %}
+            <div class="text-err">⚠ OPENAI_API_KEY não configurada</div>
+          {% endif %}
+        {% elif config.llm_provider == 'gemini' %}
+          <div>modelo: <span class="font-mono">{{ config.gemini_model }}</span></div>
+          {% if not config.gemini_key_set %}
+            <div class="text-err">⚠ GEMINI_API_KEY não configurada</div>
           {% endif %}
         {% else %}
           <div>modelo: <span class="font-mono">{{ config.ollama_model }}</span></div>

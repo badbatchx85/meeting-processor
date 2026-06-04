@@ -74,27 +74,39 @@ pip install -r requirements.txt
 
 ### Passo 4 *(opcional)* — Ative o resumo com IA
 
-Escolha **um** provedor:
+Primeiro copie o `.env.example` para `.env`
+(`copy .env.example .env` no Windows, `cp .env.example .env` no macOS/Linux).
+Depois escolha **um** provedor e preencha a chave no `.env`:
 
-**A) Claude API** — melhor qualidade, requer chave paga:
+| Provedor | `MEETING_LLM_PROVIDER` | Chave no `.env` | Onde obter |
+|----------|------------------------|-----------------|------------|
+| **Claude** | `anthropic` | `ANTHROPIC_API_KEY` | <https://console.anthropic.com/> |
+| **OpenAI** | `openai` | `OPENAI_API_KEY` | <https://platform.openai.com/> |
+| **Gemini** | `gemini` | `GEMINI_API_KEY` | <https://aistudio.google.com/apikey> |
+| **Ollama (local, grátis)** | `local` | — | <https://ollama.com/download> |
 
-1. Pegue uma chave em <https://console.anthropic.com/>.
-2. Copie o `.env.example` para `.env`:
-   - Windows: `copy .env.example .env`
-   - macOS/Linux: `cp .env.example .env`
-3. Edite o `.env`:
-   ```dotenv
-   MEETING_LLM_PROVIDER=anthropic
-   ANTHROPIC_API_KEY=sk-ant-...
-   ```
+Exemplo (OpenAI):
+```dotenv
+MEETING_LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+# MEETING_OPENAI_MODEL=gpt-4o
+```
 
-**B) Ollama local** — grátis e privado, requer instalar o Ollama:
+Para **Ollama**, instale e baixe um modelo (`ollama pull qwen2.5:14b`), depois
+use `MEETING_LLM_PROVIDER=local`.
 
-1. Instale: <https://ollama.com/download>
-2. Baixe o modelo: `ollama pull qwen2.5:14b`
-3. No `.env`: `MEETING_LLM_PROVIDER=local`
-
+> Você também troca de provedor pela interface web, sem editar arquivos.
 > Sem o passo 4, o sistema funciona em **modo só transcrição**.
+
+**Qualquer outro modelo do mercado** — o provedor `openai` aceita qualquer
+serviço compatível com a API da OpenAI: basta trocar `MEETING_OPENAI_BASE_URL`.
+
+| Serviço | Base URL | Exemplo de modelo |
+|---------|----------|-------------------|
+| OpenRouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o`, `anthropic/claude-3.5-sonnet` |
+| Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| xAI (Grok) | `https://api.x.ai/v1` | `grok-2-latest` |
 
 ---
 
@@ -213,7 +225,7 @@ meeting_processor/
 ├── config.py          # configuração (YAML + .env + interface)
 ├── audio.py           # extração de áudio (ffmpeg)
 ├── transcriber.py     # Whisper (openai-whisper / whisper.cpp)
-├── summarizer.py      # resumo (Claude API / Ollama)
+├── summarizer.py      # resumo (Claude / OpenAI / Gemini / Ollama)
 ├── note_generator.py  # notas Markdown para Obsidian
 ├── kanban.py          # quadros Kanban
 ├── pipeline.py        # orquestra as etapas escolhidas

@@ -30,12 +30,29 @@ whisper_initial_prompt: "Transcrição de reunião em português brasileiro."
 # ----------------------------------------------------------
 # Provedor de LLM (resumo da reunião)
 # ----------------------------------------------------------
-# Valores: "anthropic" (Claude API) ou "local" (Ollama)
-# Pode ser sobrescrito por env var: MEETING_LLM_PROVIDER
+# Valores: "anthropic" (Claude), "openai" (OpenAI/compatíveis),
+#          "gemini" (Google) ou "local" (Ollama).
+# Também alterável pela interface web. Env var: MEETING_LLM_PROVIDER.
+# As chaves de API ficam no .env (nunca no config.yaml).
 llm_provider: "anthropic"
 
-# Claude API
+# Claude API — requer ANTHROPIC_API_KEY no .env
 anthropic_model: "claude-sonnet-4-20250514"
+
+# OpenAI e qualquer serviço compatível — requer OPENAI_API_KEY no .env.
+# Para usar outro serviço, troque openai_base_url:
+#   OpenRouter: https://openrouter.ai/api/v1   (modelo ex.: "openai/gpt-4o")
+#   Groq:       https://api.groq.com/openai/v1
+#   DeepSeek:   https://api.deepseek.com/v1     (modelo: "deepseek-chat")
+#   xAI/Grok:   https://api.x.ai/v1             (modelo: "grok-2-latest")
+openai_base_url: "https://api.openai.com/v1"
+openai_model: "gpt-4o"
+openai_request_timeout: 600.0
+
+# Google Gemini — requer GEMINI_API_KEY no .env
+gemini_base_url: "https://generativelanguage.googleapis.com"
+gemini_model: "gemini-2.0-flash"
+gemini_request_timeout: 600.0
 
 # Ollama (LLM local) — usado quando llm_provider == "local"
 # Requer Ollama instalado e o modelo baixado:

@@ -45,12 +45,28 @@ class Settings(BaseModel):
     # ---------------------------------------------------------------
     # Provedor de LLM usado pelo summarizer.
     #   "anthropic" -> Claude API (requer ANTHROPIC_API_KEY)
+    #   "openai"    -> OpenAI e compatíveis (requer OPENAI_API_KEY)
+    #   "gemini"    -> Google Gemini (requer GEMINI_API_KEY)
     #   "local" / "ollama" -> Ollama local (requer servidor rodando)
     llm_provider: str = "anthropic"
 
     # Claude API
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-20250514"
+
+    # OpenAI e qualquer serviço compatível com a API da OpenAI
+    # (OpenRouter, Groq, DeepSeek, xAI/Grok, Mistral, Azure, ...).
+    # Para usar outro serviço, basta trocar openai_base_url + OPENAI_API_KEY.
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4o"
+    openai_request_timeout: float = 600.0
+
+    # Google Gemini (API nativa)
+    gemini_api_key: str = ""
+    gemini_base_url: str = "https://generativelanguage.googleapis.com"
+    gemini_model: str = "gemini-2.0-flash"
+    gemini_request_timeout: float = 600.0
 
     # Ollama (LLM local)
     ollama_base_url: str = "http://localhost:11434"
@@ -163,6 +179,10 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_LOG_LEVEL": "log_level",
         # LLM
         "MEETING_LLM_PROVIDER": "llm_provider",
+        "MEETING_OPENAI_BASE_URL": "openai_base_url",
+        "MEETING_OPENAI_MODEL": "openai_model",
+        "MEETING_GEMINI_BASE_URL": "gemini_base_url",
+        "MEETING_GEMINI_MODEL": "gemini_model",
         "MEETING_OLLAMA_BASE_URL": "ollama_base_url",
         "MEETING_OLLAMA_MODEL": "ollama_model",
     }
@@ -210,6 +230,10 @@ def load_config(config_path: str | None = None) -> Settings:
             )
 
     config_data["anthropic_api_key"] = os.environ.get("ANTHROPIC_API_KEY", "")
+    config_data["openai_api_key"] = os.environ.get("OPENAI_API_KEY", "")
+    config_data["gemini_api_key"] = os.environ.get(
+        "GEMINI_API_KEY", os.environ.get("GOOGLE_API_KEY", "")
+    )
     config_data["project_root"] = str(project_root)
 
     # Default portável para a pasta monitorada: ~/Videos/OBS.

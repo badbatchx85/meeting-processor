@@ -419,11 +419,14 @@ def create_app(config: Settings | None = None) -> FastAPI:
     supervisor = get_supervisor(Path(config.project_root))
 
     def _provider_label() -> str:
-        return (
-            "Ollama (local)"
-            if config.llm_provider in ("local", "ollama")
-            else "Claude API"
-        )
+        labels = {
+            "anthropic": "Claude API",
+            "openai": "OpenAI",
+            "gemini": "Gemini",
+            "local": "Ollama (local)",
+            "ollama": "Ollama (local)",
+        }
+        return labels.get(config.llm_provider, config.llm_provider)
 
     def _base_ctx() -> dict[str, Any]:
         """Contexto compartilhado por todas as páginas (para sidebar)."""
@@ -445,6 +448,11 @@ def create_app(config: Settings | None = None) -> FastAPI:
             "llm_provider": config.llm_provider,
             "provider_label": _provider_label(),
             "anthropic_model": config.anthropic_model,
+            "openai_model": config.openai_model,
+            "openai_base_url": config.openai_base_url,
+            "openai_key_set": bool(config.openai_api_key),
+            "gemini_model": config.gemini_model,
+            "gemini_key_set": bool(config.gemini_api_key),
             "ollama_model": config.ollama_model,
             "ollama_base_url": config.ollama_base_url,
             "ollama_num_ctx": config.ollama_num_ctx,

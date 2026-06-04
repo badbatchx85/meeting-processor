@@ -200,6 +200,10 @@ class MeetingPipeline:
         provider = (self.config.llm_provider or "anthropic").lower()
         if provider in ("local", "ollama"):
             return ("Ollama (local)", self.config.ollama_model)
+        if provider == "openai":
+            return ("OpenAI", self.config.openai_model)
+        if provider == "gemini":
+            return ("Gemini", self.config.gemini_model)
         return ("Claude API", self.config.anthropic_model)
 
     def _make_progress_cb(self, job):
