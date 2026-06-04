@@ -13,6 +13,7 @@ from .models import MeetingSummary, ProcessingResult, Transcript
 from .note_generator import NoteGenerator
 from .summarizer import MeetingSummarizer
 from .transcriber import WhisperTranscriber
+from .utils import format_duration
 from .wiki_integrator import WikiIntegrator
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class MeetingPipeline:
             job.set_progress("transcription", 5, "Carregando modelo...")
             self.dashboard.update(job)
             transcript = self.transcriber.transcribe(audio_path, progress_callback=self._make_progress_cb(job))
-            duration_str = self._format_duration(transcript.duration)
+            duration_str = format_duration(transcript.duration)
             job.set_progress("transcription", 100, f"{len(transcript.segments)} segmentos, {duration_str}")
             self.dashboard.update(job)
 
@@ -116,7 +117,7 @@ class MeetingPipeline:
 
             # Etapa 6: Integrar com wiki
             logger.info("[6/6] Integrando com wiki claude-obsidian...")
-            duration = self._format_duration(transcript.duration)
+            duration = format_duration(transcript.duration)
             job.advance("wiki", "Atualizando index, log e hot cache")
             job.set_progress("wiki", 20)
             self.dashboard.update(job)
@@ -182,10 +183,3 @@ class MeetingPipeline:
             job.set_progress("transcription", pct, detail)
             self.dashboard.update(job)
         return cb
-
-    @staticmethod
-    def _format_duration(seconds: float) -> str:
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = int(seconds % 60)
-        return f"{h:02d}:{m:02d}:{s:02d}"

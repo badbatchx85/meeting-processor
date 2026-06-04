@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .config import Settings
 from .models import MeetingSummary, Transcript
+from .utils import format_duration, format_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class NoteGenerator:
         transcricao_link: str = "Transcricao",
     ) -> str:
         """Constrói o conteúdo completo da nota Obsidian."""
-        duration = self._format_duration(transcript.duration)
+        duration = format_duration(transcript.duration)
         participants_yaml = self._format_yaml_list(summary.participants)
         tags_yaml = self._format_yaml_list(self.config.default_tags)
 
@@ -187,22 +188,9 @@ duration: "{duration}"
             "",
         ]
         for seg in transcript.segments:
-            timestamp = self._format_timestamp(seg.start)
+            timestamp = format_timestamp(seg.start)
             lines.append(f"**[{timestamp}]** {seg.text}  ")
         path.write_text("\n".join(lines), encoding="utf-8")
-
-    @staticmethod
-    def _format_duration(seconds: float) -> str:
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = int(seconds % 60)
-        return f"{h:02d}:{m:02d}:{s:02d}"
-
-    @staticmethod
-    def _format_timestamp(seconds: float) -> str:
-        m = int(seconds // 60)
-        s = int(seconds % 60)
-        return f"{m:02d}:{s:02d}"
 
     @staticmethod
     def _format_yaml_list(items: list[str]) -> str:

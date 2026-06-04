@@ -22,7 +22,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, load_config
-from .runtime import VALID_PROVIDERS, get_supervisor, set_llm_provider
+from .runtime import (
+    VALID_PROVIDERS,
+    get_supervisor,
+    set_llm_provider,
+    set_watch_dir,
+)
 from .tasks_export import to_csv, to_json, to_markdown, to_txt
 from .tasks_io import (
     COLUMN_DOING,
@@ -705,6 +710,38 @@ def create_app(config: Settings | None = None) -> FastAPI:
                     "msg": f"Provedor agora: {_provider_label()}.{watcher_msg}",
                 },
                 "config": _config_ctx(),
+            },
+        )
+
+    @app.post("/actions/watch-dir", response_class=HTMLResponse)
+    async def change_watch_dir(request: Request, watch_dir: str = Form(...)):
+        result = set_watch_dir(config, watch_dir)
+        if not result["ok"]:
+            return templates.TemplateResponse(
+                request,
+                "_paths.html",
+                {
+                    "config": _config_ctx(),
+                    "flash": {"type": "err", "msg": result.get("error", "Erro")},
+                },
+                status_code=400,
+            )
+
+        watcher_msg = ""
+        if supervisor.is_running():
+            supervisor.restart()
+            watcher_msg = " Watcher reiniciado para aplicar."
+
+        exists_msg = "" if result["exists"] else " (atenção: a pasta ainda não existe)"
+        return templates.TemplateResponse(
+            request,
+            "_paths.html",
+            {
+                "config": _config_ctx(),
+                "flash": {
+                    "type": "ok",
+                    "msg": f"Pasta monitorada salva.{exists_msg}{watcher_msg}",
+                },
             },
         )
 

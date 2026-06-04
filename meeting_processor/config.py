@@ -16,8 +16,10 @@ class KanbanColumns(BaseModel):
 
 class Settings(BaseModel):
     # Caminhos
-    watch_dir: str
-    vault_dir: str
+    # watch_dir vazio => auto-detecta ~/Videos/OBS (resolvido em load_config).
+    # Editável pela interface web ou via env MEETING_WATCH_DIR.
+    watch_dir: str = ""
+    vault_dir: str = "./vault"
 
     # Monitoramento
     watch_extensions: list[str] = [".mkv", ".mp4", ".webm"]
@@ -28,6 +30,10 @@ class Settings(BaseModel):
     whisper_language: str = "pt"
     whisper_device: str = "cpu"
     whisper_initial_prompt: str = "Transcrição de reunião em português brasileiro."
+    # Caminhos do whisper.cpp. Vazio => detecta automaticamente no PATH
+    # do sistema e em .whisper-cpp/ e .models/ dentro do projeto.
+    whisper_cli_path: str = ""
+    whisper_model_path: str = ""
 
     # ---------------------------------------------------------------
     # LLM (provedor de resumo)
@@ -76,7 +82,7 @@ class Settings(BaseModel):
 
     @property
     def watch_path(self) -> Path:
-        return Path(self.watch_dir)
+        return Path(self.watch_dir).expanduser()
 
     @property
     def temp_path(self) -> Path:
@@ -121,6 +127,8 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_WHISPER_MODEL": "whisper_model",
         "MEETING_WHISPER_LANGUAGE": "whisper_language",
         "MEETING_WHISPER_DEVICE": "whisper_device",
+        "MEETING_WHISPER_CLI_PATH": "whisper_cli_path",
+        "MEETING_WHISPER_MODEL_PATH": "whisper_model_path",
         "MEETING_ANTHROPIC_MODEL": "anthropic_model",
         "MEETING_LOG_LEVEL": "log_level",
         # LLM
@@ -159,6 +167,11 @@ def load_config(config_path: str | None = None) -> Settings:
 
     config_data["anthropic_api_key"] = os.environ.get("ANTHROPIC_API_KEY", "")
     config_data["project_root"] = str(project_root)
+
+    # Default portável para a pasta monitorada: ~/Videos/OBS.
+    # Funciona em Windows, macOS e Linux sem caminho hardcoded.
+    if not config_data.get("watch_dir"):
+        config_data["watch_dir"] = str(Path.home() / "Videos" / "OBS")
 
     settings = Settings(**config_data)
 

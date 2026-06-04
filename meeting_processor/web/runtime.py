@@ -186,6 +186,19 @@ def _upsert_env_var(lines: list[str], key: str, value: str) -> list[str]:
     return new_lines
 
 
+def persist_env_setting(project_root: Path, key: str, value: str) -> None:
+    """Grava ``key=value`` no ``.env`` e na env do processo atual.
+
+    Centraliza o padrão usado para persistir configurações editáveis pela
+    interface (provedor de LLM, pasta monitorada, ...).
+    """
+    env_file = _env_path(project_root)
+    lines = _read_env_lines(env_file)
+    new_lines = _upsert_env_var(lines, key, value)
+    env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    os.environ[key] = value
+
+
 def set_llm_provider(config: Settings, provider: str) -> dict:
     """Altera o provedor de LLM em runtime e persiste no ``.env``.
 
@@ -209,17 +222,10 @@ def set_llm_provider(config: Settings, provider: str) -> dict:
 
     previous = config.llm_provider
 
-    # 1. Persiste no .env
-    project_root = Path(config.project_root)
-    env_file = _env_path(project_root)
-    lines = _read_env_lines(env_file)
-    new_lines = _upsert_env_var(lines, "MEETING_LLM_PROVIDER", provider)
-    env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    # 1. Persiste no .env + env do processo atual (subprocess novos herdam)
+    persist_env_setting(Path(config.project_root), "MEETING_LLM_PROVIDER", provider)
 
-    # 2. Atualiza a env do processo atual (subprocess novos herdam)
-    os.environ["MEETING_LLM_PROVIDER"] = provider
-
-    # 3. Atualiza o Settings em memória (Pipeline novos pegam isso)
+    # 2. Atualiza o Settings em memória (Pipeline novos pegam isso)
     config.llm_provider = provider
 
     logger.info("LLM provider alterado: %s -> %s", previous, provider)
@@ -229,5 +235,32 @@ def set_llm_provider(config: Settings, provider: str) -> dict:
         "current": provider,
         # O processo atual já enxerga a mudança. Mas se o watcher subprocess
         # estiver rodando, ele iniciou com a env antiga.
+        "watcher_restart_needed": True,
+    }
+
+
+def set_watch_dir(config: Settings, watch_dir: str) -> dict:
+    """Altera a pasta monitorada (OBS) em runtime e persiste no ``.env``.
+
+    O caminho não precisa existir ainda (a pasta pode ser criada depois);
+    nesse caso devolvemos ``exists: False`` para a interface avisar.
+    """
+    watch_dir = (watch_dir or "").strip()
+    if not watch_dir:
+        return {"ok": False, "error": "Informe um caminho para a pasta monitorada."}
+
+    resolved = str(Path(watch_dir).expanduser())
+    previous = config.watch_dir
+
+    persist_env_setting(Path(config.project_root), "MEETING_WATCH_DIR", resolved)
+    config.watch_dir = resolved
+
+    logger.info("Pasta monitorada alterada: %s -> %s", previous, resolved)
+    return {
+        "ok": True,
+        "previous": previous,
+        "current": resolved,
+        "exists": Path(resolved).is_dir(),
+        # O watcher subprocess lê a env só ao iniciar.
         "watcher_restart_needed": True,
     }

@@ -2,7 +2,11 @@
 # ================================
 
 # Caminhos
-watch_dir: "C:\\Users\\Pichau\\Videos\\OBS"
+# watch_dir: pasta onde o OBS salva as gravações.
+#   - Deixe em branco para detectar automaticamente ~/Videos/OBS (qualquer SO).
+#   - Pode ser definido pela interface web (Configuração) ou pela env MEETING_WATCH_DIR.
+#   - Aceita "~" para a home. Ex.: "~/Videos/OBS" ou "D:/Gravacoes".
+watch_dir: ""
 vault_dir: "./vault"
 
 # Monitoramento de arquivos

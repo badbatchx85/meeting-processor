@@ -2,11 +2,21 @@
 
 import logging
 import subprocess
+import sys
 from pathlib import Path
 
 from .config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _ffmpeg_install_hint() -> str:
+    """Sugestão de instalação do ffmpeg conforme o sistema operacional."""
+    if sys.platform == "win32":
+        return "Instale com: winget install Gyan.FFmpeg"
+    if sys.platform == "darwin":
+        return "Instale com: brew install ffmpeg"
+    return "Instale com: sudo apt install ffmpeg (ou o gerenciador da sua distro)"
 
 
 def validate_ffmpeg() -> bool:
@@ -58,8 +68,7 @@ def extract_audio(video_path: Path, config: Settings) -> Path:
     """
     if not validate_ffmpeg():
         raise RuntimeError(
-            "ffmpeg não encontrado no PATH. "
-            "Instale com: winget install Gyan.FFmpeg"
+            f"ffmpeg não encontrado no PATH. {_ffmpeg_install_hint()}"
         )
 
     output_path = config.temp_path / f"{video_path.stem}.wav"

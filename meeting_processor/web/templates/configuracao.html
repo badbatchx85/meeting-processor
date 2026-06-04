@@ -72,24 +72,11 @@
 <!-- Caminhos -->
 <section id="caminhos" class="mb-6">
   <h2 class="text-xs uppercase tracking-wide text-mute mb-2">Caminhos</h2>
-  <div class="card p-5 space-y-2 text-sm">
-    <div>
-      <div class="text-mute text-xs">Pasta monitorada (OBS)</div>
-      <div class="font-mono text-sm break-all mt-1">{{ config.watch_dir }}</div>
-    </div>
-    <div>
-      <div class="text-mute text-xs">Vault</div>
-      <div class="font-mono text-sm break-all mt-1">{{ config.vault_dir }}</div>
-    </div>
-    <div>
-      <div class="text-mute text-xs">Temp</div>
-      <div class="font-mono text-sm break-all mt-1">{{ config.temp_dir }}</div>
-    </div>
-  </div>
+  {% include "_paths.html" %}
 </section>
 
 <p class="text-xs text-mute">
-  Para alterar valores além de Watcher e Provedor LLM, edite
+  Para alterar os demais valores (Whisper, modelos LLM), edite
   <span class="font-mono">config.yaml</span> ou <span class="font-mono">.env</span>
   e reinicie o servidor web.
 </p>

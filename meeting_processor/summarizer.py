@@ -30,6 +30,7 @@ from .models import (
     Transcript,
     TranscriptSegment,
 )
+from .utils import format_duration, format_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class _BaseSummarizer:
 
         user_prompt = (
             f"Arquivo de origem: {source_filename}\n"
-            f"Duração total: {self._format_duration(transcript.duration)}\n\n"
+            f"Duração total: {format_duration(transcript.duration)}\n\n"
             f"--- TRANSCRIÇÃO ---\n\n{chunked_text}"
         )
 
@@ -161,7 +162,7 @@ class _BaseSummarizer:
                 current_chunk_start = chunk_start
                 lines.append(f"\n[{chunk_start:02d}:00 - {chunk_end:02d}:00]")
 
-            timestamp = self._format_timestamp(seg.start)
+            timestamp = format_timestamp(seg.start)
             lines.append(f"  [{timestamp}] {seg.text}")
 
         return "\n".join(lines)
@@ -208,20 +209,6 @@ class _BaseSummarizer:
             participants=[],
             key_topics=[],
         )
-
-    @staticmethod
-    def _format_duration(seconds: float) -> str:
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = int(seconds % 60)
-        return f"{h:02d}:{m:02d}:{s:02d}"
-
-    @staticmethod
-    def _format_timestamp(seconds: float) -> str:
-        m = int(seconds // 60)
-        s = int(seconds % 60)
-        return f"{m:02d}:{s:02d}"
-
 
 # ---------------------------------------------------------------------------
 # Provedor: Claude (Anthropic API)
