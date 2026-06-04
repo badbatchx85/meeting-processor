@@ -184,6 +184,7 @@ class Dashboard:
                 "completed": j.completed_at.isoformat() if j.completed_at else None,
                 "details": j.details,
                 "stage": j.current_stage,
+                "stage_progress": dict(j.stage_progress),
                 "error_message": j.error_message or None,
                 "failed_stage": self._stage_label_at(j.current_stage)
                 if j.status == "error"

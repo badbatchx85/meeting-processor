@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, load_config
+from ..dashboard import STAGES
 from . import spa_serving
 from .runtime import (
     VALID_PROVIDERS,
@@ -378,6 +379,41 @@ def _read_status(vault_path: Path, watch_dir: str | None = None) -> dict[str, An
         "last_heartbeat": last_heartbeat,
         "active_jobs": active_jobs,
         "history": history_entries[-20:][::-1],
+    }
+
+
+def _job_progress(entry: dict[str, Any]) -> dict[str, Any]:
+    """Converte uma entrada de job ativo em progresso pronto para a UI.
+
+    O progresso é por etapa (6 no total). A etapa de transcrição reporta uma
+    sub-porcentagem ao vivo; as demais avançam por etapa. O ``percent`` geral
+    combina as duas: (etapas concluídas + fração da etapa atual) / total.
+    """
+    total = len(STAGES)
+    stage_idx = entry.get("stage", -1)
+    stage_progress = entry.get("stage_progress") or {}
+    details = entry.get("details") or {}
+
+    if 0 <= stage_idx < total:
+        key, label = STAGES[stage_idx]
+        stage_percent = int(stage_progress.get(key, 0))
+        detail = details.get(key, "")
+        percent = round((stage_idx + stage_percent / 100) / total * 100)
+        stage_number = stage_idx + 1
+    elif stage_idx < 0:
+        label, stage_percent, detail, percent, stage_number = "Aguardando…", 0, "", 0, 0
+    else:  # já passou da última etapa
+        label, stage_percent, detail, percent, stage_number = "Finalizando…", 100, "", 100, total
+
+    return {
+        "file": entry.get("file", ""),
+        "status": entry.get("status", "processing"),
+        "stage_number": stage_number,
+        "stage_total": total,
+        "stage_label": label,
+        "stage_percent": stage_percent,
+        "percent": percent,
+        "detail": detail,
     }
 
 
@@ -929,6 +965,14 @@ def create_app(config: Settings | None = None) -> FastAPI:
     @app.get("/api/watcher")
     async def api_watcher():
         return supervisor.info()
+
+    @app.get("/api/status")
+    async def api_status():
+        status = _read_status(config.vault_path, config.watch_dir)
+        return {
+            "watcher_alive": status["watcher_alive"],
+            "active": [_job_progress(j) for j in status["active_jobs"]],
+        }
 
     @app.post("/api/watcher/start")
     async def api_watcher_start():

@@ -22,3 +22,9 @@ export interface Task {
   done: boolean; assignee: string; priority: string; due_date: string; timestamp: string;
 }
 export interface Steps { summary: boolean; note: boolean; kanban: boolean; wiki: boolean; }
+export interface JobProgress {
+  file: string; status: string;
+  stage_number: number; stage_total: number; stage_label: string;
+  stage_percent: number; percent: number; detail: string;
+}
+export interface StatusResponse { watcher_alive: boolean; active: JobProgress[]; }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import type {
-  Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps,
+  Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -17,6 +17,13 @@ export const useWatcher = () =>
     queryKey: ["watcher"],
     queryFn: () => api.get<Watcher>("/api/watcher"),
     refetchInterval: 3000,
+  });
+
+export const useStatus = () =>
+  useQuery({
+    queryKey: ["status"],
+    queryFn: () => api.get<StatusResponse>("/api/status"),
+    refetchInterval: 2000,
   });
 
 export const useLlm = () =>

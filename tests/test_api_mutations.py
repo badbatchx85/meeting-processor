@@ -116,3 +116,42 @@ def test_upload_accepts_media_saves_and_queues(client, config, monkeypatch):
     # arquivo realmente gravado em uploads/
     saved = Path(config.project_root) / "uploads" / "reuniao.mp4"
     assert saved.exists() and saved.read_bytes() == b"\x00\x01\x02"
+
+
+def test_status_reports_active_job_progress(client, config):
+    import json
+
+    history = config.vault_path / "wiki" / ".processing-history.json"
+    history.write_text(
+        json.dumps([
+            {
+                "file": "reuniao.mp4",
+                "status": "processing",
+                "started": "2026-06-03T20:00:00",
+                "completed": None,
+                "details": {"transcription": "120 segmentos"},
+                "stage": 1,  # transcription (0-based)
+                "stage_progress": {"transcription": 50},
+            }
+        ]),
+        encoding="utf-8",
+    )
+
+    r = client.get("/api/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["active"]) == 1
+    job = body["active"][0]
+    assert job["file"] == "reuniao.mp4"
+    assert job["stage_number"] == 2 and job["stage_total"] == 6
+    assert "Transcre" in job["stage_label"]
+    assert job["stage_percent"] == 50
+    # overall = (1 + 0.5) / 6 = 25%
+    assert job["percent"] == 25
+    assert job["detail"] == "120 segmentos"
+
+
+def test_status_empty_when_no_active_jobs(client):
+    r = client.get("/api/status")
+    assert r.status_code == 200
+    assert r.json()["active"] == []
