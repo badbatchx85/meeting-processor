@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, load_config
+from . import spa_serving
 from .runtime import (
     VALID_PROVIDERS,
     get_supervisor,
@@ -416,6 +417,13 @@ def create_app(config: Settings | None = None) -> FastAPI:
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    if spa_serving.SPA_DIR.exists():
+        app.mount(
+            "/ui/assets",
+            StaticFiles(directory=str(spa_serving.SPA_DIR / "assets")),
+            name="spa-assets",
+        )
+
     supervisor = get_supervisor(Path(config.project_root))
 
     def _provider_label() -> str:
@@ -477,7 +485,17 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def root_redirect():
+        if spa_serving.spa_built():
+            return RedirectResponse(url="/ui", status_code=302)
         return RedirectResponse(url="/dashboard", status_code=302)
+
+    @app.get("/ui", response_class=HTMLResponse)
+    async def spa_root():
+        return spa_serving.spa_index_response()
+
+    @app.get("/ui/{full_path:path}", response_class=HTMLResponse)
+    async def spa_catch_all(full_path: str):
+        return spa_serving.spa_index_response()
 
     # ---- Dashboard ------------------------------------------------------
 
