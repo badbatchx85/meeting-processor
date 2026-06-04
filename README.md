@@ -238,6 +238,7 @@ meeting_processor/
 Documentos extras: [`docs/obsidian.md`](docs/obsidian.md),
 [`docs/llm-local.md`](docs/llm-local.md),
 [`docs/frontend-local.md`](docs/frontend-local.md).
+- Interface moderna (React SPA): veja [`docs/frontend-spa.md`](docs/frontend-spa.md).
 
 ---
 

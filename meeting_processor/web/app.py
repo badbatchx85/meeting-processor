@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, load_config
+from . import spa_serving
 from .runtime import (
     VALID_PROVIDERS,
     get_supervisor,
@@ -416,6 +417,14 @@ def create_app(config: Settings | None = None) -> FastAPI:
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    _spa_assets = spa_serving.SPA_DIR / "assets"
+    if _spa_assets.exists():
+        app.mount(
+            "/ui/assets",
+            StaticFiles(directory=str(_spa_assets)),
+            name="spa-assets",
+        )
+
     supervisor = get_supervisor(Path(config.project_root))
 
     def _provider_label() -> str:
@@ -477,7 +486,17 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def root_redirect():
+        if spa_serving.spa_built():
+            return RedirectResponse(url="/ui", status_code=302)
         return RedirectResponse(url="/dashboard", status_code=302)
+
+    @app.get("/ui", response_class=HTMLResponse)
+    async def spa_root():
+        return spa_serving.spa_index_response()
+
+    @app.get("/ui/{full_path:path}", response_class=HTMLResponse)
+    async def spa_catch_all(full_path: str):  # noqa: ARG001 - path served by SPA shell
+        return spa_serving.spa_index_response()
 
     # ---- Dashboard ------------------------------------------------------
 
@@ -909,6 +928,122 @@ def create_app(config: Settings | None = None) -> FastAPI:
     @app.get("/api/watcher")
     async def api_watcher():
         return supervisor.info()
+
+    @app.post("/api/watcher/start")
+    async def api_watcher_start():
+        result = supervisor.start()
+        return {"ok": result["ok"], "error": result.get("error"), "watcher": supervisor.info()}
+
+    @app.post("/api/watcher/stop")
+    async def api_watcher_stop():
+        result = supervisor.stop()
+        return {"ok": result["ok"], "error": result.get("error"), "watcher": supervisor.info()}
+
+    @app.post("/api/watcher/restart")
+    async def api_watcher_restart():
+        result = supervisor.restart()
+        return {"ok": result["ok"], "error": result.get("error"), "watcher": supervisor.info()}
+
+    @app.post("/api/llm/provider")
+    async def api_set_provider(payload: dict):
+        provider = (payload or {}).get("provider", "")
+        result = set_llm_provider(config, provider)
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Provedor inválido")},
+                status_code=400,
+            )
+        if supervisor.is_running():
+            supervisor.restart()
+        return {
+            "ok": True,
+            "llm": {
+                "provider": config.llm_provider,
+                "label": _provider_label(),
+                "valid_providers": list(VALID_PROVIDERS),
+            },
+        }
+
+    @app.post("/api/config/watch-dir")
+    async def api_set_watch_dir(payload: dict):
+        watch_dir = (payload or {}).get("watch_dir", "")
+        result = set_watch_dir(config, watch_dir)
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Caminho inválido")},
+                status_code=400,
+            )
+        if supervisor.is_running():
+            supervisor.restart()
+        return {"ok": True, "exists": result["exists"], "watch_dir": config.watch_dir}
+
+    @app.post("/api/config/steps")
+    async def api_set_steps(payload: dict):
+        p = payload or {}
+        set_pipeline_steps(
+            config,
+            summary=bool(p.get("summary")),
+            note=bool(p.get("note")),
+            kanban=bool(p.get("kanban")),
+            wiki=bool(p.get("wiki")),
+        )
+        if supervisor.is_running():
+            supervisor.restart()
+        return {
+            "ok": True,
+            "steps": {
+                "summary": config.enable_summary,
+                "note": config.enable_note,
+                "kanban": config.enable_kanban,
+                "wiki": config.enable_wiki,
+            },
+        }
+
+    @app.post("/api/process")
+    async def api_process(payload: dict):
+        file = (payload or {}).get("file", "")
+        path = Path(file)
+        if not file or not path.exists():
+            return JSONResponse(
+                {"ok": False, "error": f"Arquivo não encontrado: {file}"},
+                status_code=400,
+            )
+        # defesa: só arquivos de mídia suportados
+        if not path.is_file():
+            return JSONResponse(
+                {"ok": False, "error": "Caminho não é um arquivo."},
+                status_code=400,
+            )
+        allowed_ext = {e.lower() for e in config.watch_extensions}
+        if allowed_ext and path.suffix.lower() not in allowed_ext:
+            return JSONResponse(
+                {"ok": False, "error": f"Extensão não suportada: {path.suffix}"},
+                status_code=400,
+            )
+
+        def _run():
+            try:
+                from ..pipeline import MeetingPipeline
+
+                MeetingPipeline(config).process(path)
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha ao processar via API")
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "queued": True, "file": str(path)}
+
+    @app.post("/api/history/remove")
+    async def api_history_remove(payload: dict):
+        p = payload or {}
+        result = _remove_history_entry(
+            config.vault_path, p.get("file", ""), p.get("started") or None
+        )
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Não encontrado")},
+                status_code=404,
+            )
+        return {"ok": True}
 
     @app.get("/api/llm")
     async def api_llm():
