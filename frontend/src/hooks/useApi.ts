@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { api, uploadFile } from "../api/client";
 import type {
   Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps,
 } from "../api/types";
@@ -66,6 +67,19 @@ export function useProcessFile() {
     mutationFn: (file: string) => api.post("/api/process", { file }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings"] }),
   });
+}
+
+export function useUploadFile() {
+  const qc = useQueryClient();
+  const [progress, setProgress] = useState<number | null>(null);
+  const mutation = useMutation({
+    mutationFn: (file: File) =>
+      uploadFile("/api/process/upload", file, setProgress),
+    onMutate: () => setProgress(0),
+    onSettled: () => setProgress(null),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings"] }),
+  });
+  return { ...mutation, progress };
 }
 
 export function useDeleteMeeting() {

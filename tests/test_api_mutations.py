@@ -1,4 +1,5 @@
 """Tests for the JSON mutation endpoints used by the SPA."""
+from pathlib import Path
 
 
 def test_watcher_start_stop_returns_json(client):
@@ -81,3 +82,37 @@ def test_process_rejects_unsupported_extension(client, tmp_path):
     r = client.post("/api/process", json={"file": str(f)})
     assert r.status_code == 400
     assert r.json()["ok"] is False
+
+
+def test_upload_rejects_unsupported_extension(client):
+    r = client.post(
+        "/api/process/upload",
+        files={"file": ("notas.txt", b"hello", "text/plain")},
+    )
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+
+
+def test_upload_accepts_media_saves_and_queues(client, config, monkeypatch):
+    started = {"path": None}
+
+    class _FakePipeline:
+        def __init__(self, *a, **k): ...
+        def process(self, path):
+            started["path"] = path
+
+    monkeypatch.setattr(
+        "meeting_processor.pipeline.MeetingPipeline", _FakePipeline, raising=False
+    )
+
+    r = client.post(
+        "/api/process/upload",
+        files={"file": ("reuniao.mp4", b"\x00\x01\x02", "video/mp4")},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["queued"] is True
+    assert body["file"] == "reuniao.mp4"
+    # arquivo realmente gravado em uploads/
+    saved = Path(config.project_root) / "uploads" / "reuniao.mp4"
+    assert saved.exists() and saved.read_bytes() == b"\x00\x01\x02"

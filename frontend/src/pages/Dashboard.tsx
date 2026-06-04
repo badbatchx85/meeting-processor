@@ -1,12 +1,21 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Play, Square, RotateCw, FileVideo } from "lucide-react";
+import { Play, Square, RotateCw, FileVideo, Upload } from "lucide-react";
 import { Card } from "../components/Card";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { useToast } from "../components/Toast";
-import { useHealth, useWatcher, useMeetings, useWatcherControl, useProcessFile } from "../hooks/useApi";
+import { useHealth, useWatcher, useMeetings, useWatcherControl, useProcessFile, useUploadFile } from "../hooks/useApi";
 import { ApiError } from "../api/client";
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(1)} ${units[i]}`;
+}
 
 export function Dashboard() {
   const health = useHealth();
@@ -14,14 +23,29 @@ export function Dashboard() {
   const meetings = useMeetings();
   const { start, stop, restart } = useWatcherControl();
   const process = useProcessFile();
+  const upload = useUploadFile();
   const toast = useToast();
   const [file, setFile] = useState("");
+  const [selected, setSelected] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const submit = () => {
     if (!file.trim()) return;
     process.mutate(file.trim(), {
       onSuccess: () => { toast("ok", "Processamento enfileirado."); setFile(""); },
       onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
+    });
+  };
+
+  const submitUpload = () => {
+    if (!selected) return;
+    upload.mutate(selected, {
+      onSuccess: () => {
+        toast("ok", "Arquivo enviado — processando.");
+        setSelected(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      },
+      onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro no envio"),
     });
   };
 
@@ -46,15 +70,46 @@ export function Dashboard() {
       </Card>
 
       <Card title="Processar um arquivo">
-        <div className="flex flex-col gap-2">
-          <label className="text-sm text-slate-600">Caminho do vídeo no disco</label>
-          <input value={file} onChange={(e) => setFile(e.target.value)}
-            placeholder="/Users/voce/Videos/reuniao.mp4"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-          <button onClick={submit} disabled={process.isPending}
-            className="flex items-center justify-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
-            <FileVideo size={15}/> {process.isPending ? "Enviando…" : "Processar"}
-          </button>
+        <div className="flex flex-col gap-4">
+          {/* Enviar do computador */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-slate-600">Enviar do seu computador</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".mkv,.mp4,.webm,video/*"
+              onChange={(e) => setSelected(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-brand file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-dark"
+            />
+            {selected && (
+              <p className="text-xs text-slate-500">{selected.name} · {formatBytes(selected.size)}</p>
+            )}
+            {upload.progress !== null && (
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full bg-brand transition-all" style={{ width: `${upload.progress}%` }} />
+              </div>
+            )}
+            <button onClick={submitUpload} disabled={!selected || upload.isPending}
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
+              <Upload size={15}/> {upload.isPending ? `Enviando… ${upload.progress ?? 0}%` : "Enviar e processar"}
+            </button>
+          </div>
+
+          {/* Divisória */}
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span className="h-px flex-1 bg-slate-200" /> ou um caminho no servidor <span className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          {/* Caminho no servidor */}
+          <div className="flex flex-col gap-2">
+            <input value={file} onChange={(e) => setFile(e.target.value)}
+              placeholder="/Users/voce/Videos/reuniao.mp4"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <button onClick={submit} disabled={process.isPending}
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-300 disabled:opacity-50">
+              <FileVideo size={15}/> {process.isPending ? "Enviando…" : "Processar caminho"}
+            </button>
+          </div>
         </div>
       </Card>
 

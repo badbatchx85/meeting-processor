@@ -31,7 +31,12 @@ def spa_built() -> bool:
 
 
 def spa_index_response():
-    """Serve the SPA shell (or a build hint if it is missing)."""
+    """Serve the SPA shell (or a build hint if it is missing).
+
+    The shell is served ``no-cache`` so a rebuilt SPA (which references new
+    hashed asset filenames) is always picked up without a hard refresh.
+    The hashed assets themselves are immutable and cached normally.
+    """
     if spa_built():
-        return FileResponse(SPA_INDEX)
+        return FileResponse(SPA_INDEX, headers={"Cache-Control": "no-cache"})
     return HTMLResponse(_MISSING_HTML, status_code=200)

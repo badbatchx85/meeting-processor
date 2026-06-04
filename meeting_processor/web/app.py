@@ -16,7 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -1031,6 +1032,52 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True, "queued": True, "file": str(path)}
+
+    def _process_path_async(path: Path) -> None:
+        """Dispara o pipeline para um arquivo em uma thread daemon."""
+        def _run():
+            try:
+                from ..pipeline import MeetingPipeline
+
+                MeetingPipeline(config).process(path)
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha ao processar arquivo enviado")
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    @app.post("/api/process/upload")
+    async def api_process_upload(file: UploadFile = File(...)):
+        """Recebe um arquivo enviado pelo navegador, salva em ``uploads/`` e processa."""
+        filename = Path(file.filename or "").name  # só o nome base — evita path traversal
+        if not filename:
+            return JSONResponse(
+                {"ok": False, "error": "Nome de arquivo inválido."}, status_code=400
+            )
+        allowed_ext = {e.lower() for e in config.watch_extensions}
+        suffix = Path(filename).suffix.lower()
+        if allowed_ext and suffix not in allowed_ext:
+            return JSONResponse(
+                {"ok": False, "error": f"Extensão não suportada: {suffix or '(sem extensão)'}"},
+                status_code=400,
+            )
+
+        uploads_dir = Path(config.project_root) / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        dest = uploads_dir / filename
+        # Não sobrescreve um arquivo existente: acrescenta um contador.
+        stem, ext = Path(filename).stem, Path(filename).suffix
+        counter = 1
+        while dest.exists():
+            dest = uploads_dir / f"{stem} ({counter}){ext}"
+            counter += 1
+
+        def _save() -> None:
+            with dest.open("wb") as out:
+                shutil.copyfileobj(file.file, out)
+
+        await run_in_threadpool(_save)  # escrita em disco fora do event loop
+        _process_path_async(dest)
+        return {"ok": True, "queued": True, "file": dest.name}
 
     @app.post("/api/history/remove")
     async def api_history_remove(payload: dict):
