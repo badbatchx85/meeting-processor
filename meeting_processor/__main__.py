@@ -46,6 +46,15 @@ def main() -> None:
 
     process_parser = subparsers.add_parser("process", help="Processa um arquivo de video")
     process_parser.add_argument("file", type=str, help="Caminho do arquivo de video")
+    process_parser.add_argument(
+        "--only-transcribe",
+        action="store_true",
+        help="So transcreve (sem resumo, nota, kanban ou wiki)",
+    )
+    process_parser.add_argument("--no-summary", action="store_true", help="Nao gera resumo (LLM)")
+    process_parser.add_argument("--no-note", action="store_true", help="Nao gera nota de resumo")
+    process_parser.add_argument("--no-kanban", action="store_true", help="Nao cria Kanban")
+    process_parser.add_argument("--no-wiki", action="store_true", help="Nao integra com a wiki")
 
     web_parser = subparsers.add_parser("web", help="Frontend local no navegador")
     web_parser.add_argument("--host", default="127.0.0.1")
@@ -64,15 +73,27 @@ def main() -> None:
             logger.error("Arquivo nao encontrado: %s", video_path)
             sys.exit(1)
 
+        # Flags de etapa sobrescrevem a config só nesta execução.
+        if args.only_transcribe or args.no_summary:
+            config.enable_summary = False
+        if args.no_note:
+            config.enable_note = False
+        if args.no_kanban:
+            config.enable_kanban = False
+        if args.no_wiki:
+            config.enable_wiki = False
+
         from .pipeline import MeetingPipeline
 
         pipeline = MeetingPipeline(config)
         try:
             result = pipeline.process(video_path)
-            print(f"\nProcessamento concluido!")
-            print(f"  Nota: {result.note_path}")
+            print("\nProcessamento concluido!")
             print(f"  Transcricao: {result.raw_path}")
-            print(f"  Tarefas: {len(result.summary.action_items)}")
+            if result.note_path:
+                print(f"  Nota: {result.note_path}")
+            if result.summary is not None:
+                print(f"  Tarefas: {len(result.summary.action_items)}")
             print(f"  Tempo: {result.processing_time:.1f}s")
         except Exception:
             logger.exception("Erro fatal ao processar arquivo")

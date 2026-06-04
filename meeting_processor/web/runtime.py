@@ -239,6 +239,39 @@ def set_llm_provider(config: Settings, provider: str) -> dict:
     }
 
 
+def set_pipeline_steps(
+    config: Settings,
+    *,
+    summary: bool,
+    note: bool,
+    kanban: bool,
+    wiki: bool,
+) -> dict:
+    """Liga/desliga etapas do pipeline e persiste no ``.env``.
+
+    Áudio e transcrição rodam sempre; aqui controlamos apenas as
+    etapas opcionais. As dependências (nota/kanban/wiki exigem resumo)
+    são resolvidas por ``Settings.steps()``.
+    """
+    root = Path(config.project_root)
+    values = {
+        "MEETING_ENABLE_SUMMARY": summary,
+        "MEETING_ENABLE_NOTE": note,
+        "MEETING_ENABLE_KANBAN": kanban,
+        "MEETING_ENABLE_WIKI": wiki,
+    }
+    for key, value in values.items():
+        persist_env_setting(root, key, "true" if value else "false")
+
+    config.enable_summary = summary
+    config.enable_note = note
+    config.enable_kanban = kanban
+    config.enable_wiki = wiki
+
+    logger.info("Etapas do pipeline atualizadas: %s", config.steps())
+    return {"ok": True, "steps": config.steps(), "watcher_restart_needed": True}
+
+
 def set_watch_dir(config: Settings, watch_dir: str) -> dict:
     """Altera a pasta monitorada (OBS) em runtime e persiste no ``.env``.
 

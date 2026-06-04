@@ -2,6 +2,7 @@
 
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -12,32 +13,30 @@ from .utils import format_duration, format_timestamp
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class MeetingPaths:
+    """Caminhos e nomes dos arquivos de uma reunião no vault."""
+
+    meeting_dir: Path
+    folder_name: str
+    resumo_name: str
+    tarefas_name: str
+    transcricao_name: str
+    raw_path: Path     # Transcricao ...md (sempre)
+    note_path: Path    # Resumo ...md (só quando há resumo)
+    group_path: Path   # nó central no grafo
+
+
 class NoteGenerator:
     """Gera notas de reunião no formato Obsidian compatível com claude-obsidian."""
 
     def __init__(self, config: Settings):
         self.config = config
 
-    def generate(
-        self,
-        transcript: Transcript,
-        summary: MeetingSummary,
-        source_file: str,
-        created_at: datetime | None = None,
-    ) -> tuple[Path, Path, Path]:
-        """Gera pasta da reunião com nota principal e transcrição bruta.
-
-        Estrutura criada:
-            reunioes/<nome>/
-                <nome>.md    <- nota principal (aparece no grafo)
-                Tarefas.md   <- kanban (criado pelo pipeline)
-
-        Quando o usuario renomear a pasta no Obsidian, basta
-        renomear o .md junto e o grafo atualiza automaticamente.
-
-        Returns:
-            Tupla com (caminho da pasta, caminho da nota, caminho da transcrição).
-        """
+    def prepare(
+        self, source_file: str, created_at: datetime | None = None
+    ) -> MeetingPaths:
+        """Cria a pasta da reunião e resolve os nomes dos arquivos."""
         if created_at is None:
             created_at = datetime.now()
 
@@ -46,48 +45,82 @@ class NoteGenerator:
         video_name = Path(source_file).stem
         folder_name = f"{date_str} {time_str} - {video_name}"
 
-        # Criar pasta da reunião
         meeting_dir = self.config.reunioes_path / folder_name
         meeting_dir.mkdir(parents=True, exist_ok=True)
 
-        # Nomes dos arquivos: tipo - nome da pasta
         resumo_name = f"Resumo - {folder_name}"
         tarefas_name = f"Tarefas - {folder_name}"
         transcricao_name = f"Transcricao - {folder_name}"
 
-        # Salvar transcrição
-        raw_path = meeting_dir / f"{transcricao_name}.md"
-        self._write_raw_transcription(transcript, raw_path)
+        return MeetingPaths(
+            meeting_dir=meeting_dir,
+            folder_name=folder_name,
+            resumo_name=resumo_name,
+            tarefas_name=tarefas_name,
+            transcricao_name=transcricao_name,
+            raw_path=meeting_dir / f"{transcricao_name}.md",
+            note_path=meeting_dir / f"{resumo_name}.md",
+            group_path=meeting_dir / f"{folder_name}.md",
+        )
 
-        # Nota de resumo
+    def write_transcription(self, transcript: Transcript, paths: MeetingPaths) -> None:
+        """Salva a transcrição bruta (sempre, independe do resumo)."""
+        self._write_raw_transcription(transcript, paths.raw_path)
+        logger.info("Transcricao bruta salva: %s", paths.raw_path)
+
+    def write_summary_note(
+        self,
+        transcript: Transcript,
+        summary: MeetingSummary,
+        source_file: str,
+        created_at: datetime,
+        paths: MeetingPaths,
+    ) -> None:
+        """Salva a nota de resumo da reunião."""
         note_content = self._build_note(
-            title=folder_name,
+            title=paths.folder_name,
             summary=summary,
             transcript=transcript,
             source_file=source_file,
-            date_str=date_str,
+            date_str=created_at.strftime("%Y-%m-%d"),
             created_at=created_at,
-            tarefas_link=tarefas_name,
-            transcricao_link=transcricao_name,
+            tarefas_link=paths.tarefas_name,
+            transcricao_link=paths.transcricao_name,
         )
+        paths.note_path.write_text(note_content, encoding="utf-8")
+        logger.info("Nota de reuniao criada: %s", paths.note_path)
 
-        note_path = meeting_dir / f"{resumo_name}.md"
-        note_path.write_text(note_content, encoding="utf-8")
+    def write_group_note(self, paths: MeetingPaths, has_summary: bool) -> None:
+        """Cria o nó central do grafo, ligando só ao que foi gerado."""
+        lines = [f"# {paths.folder_name}", ""]
+        if has_summary:
+            lines.append(f"- [[{paths.resumo_name}|Resumo]]")
+            lines.append(f"- [[{paths.tarefas_name}|Tarefas]]")
+        lines.append(f"- [[{paths.transcricao_name}|Transcricao]]")
+        paths.group_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-        # Nota grupo: nome da pasta, aparece no grafo como nó central
-        group_path = meeting_dir / f"{folder_name}.md"
-        group_path.write_text(
-            f"# {folder_name}\n\n"
-            f"- [[{resumo_name}|Resumo]]\n"
-            f"- [[{tarefas_name}|Tarefas]]\n"
-            f"- [[{transcricao_name}|Transcricao]]\n",
-            encoding="utf-8",
-        )
+    def generate(
+        self,
+        transcript: Transcript,
+        summary: MeetingSummary,
+        source_file: str,
+        created_at: datetime | None = None,
+    ) -> tuple[Path, Path, Path]:
+        """Gera a reunião completa (transcrição + resumo + grafo).
 
-        logger.info("Nota de reuniao criada: %s", note_path)
-        logger.info("Transcricao bruta salva: %s", raw_path)
+        Mantido por compatibilidade; o pipeline chama os passos
+        individualmente conforme as etapas habilitadas.
 
-        return meeting_dir, note_path, raw_path
+        Returns:
+            (pasta da reunião, nota de resumo, transcrição).
+        """
+        if created_at is None:
+            created_at = datetime.now()
+        paths = self.prepare(source_file, created_at)
+        self.write_transcription(transcript, paths)
+        self.write_summary_note(transcript, summary, source_file, created_at, paths)
+        self.write_group_note(paths, has_summary=True)
+        return paths.meeting_dir, paths.note_path, paths.raw_path
 
     def _build_note(
         self,

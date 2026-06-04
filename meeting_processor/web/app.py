@@ -26,6 +26,7 @@ from .runtime import (
     VALID_PROVIDERS,
     get_supervisor,
     set_llm_provider,
+    set_pipeline_steps,
     set_watch_dir,
 )
 from .tasks_export import to_csv, to_json, to_markdown, to_txt
@@ -455,6 +456,10 @@ def create_app(config: Settings | None = None) -> FastAPI:
             "whisper_language": config.whisper_language,
             "whisper_device": config.whisper_device,
             "temp_dir": config.temp_dir,
+            "enable_summary": config.enable_summary,
+            "enable_note": config.enable_note,
+            "enable_kanban": config.enable_kanban,
+            "enable_wiki": config.enable_wiki,
         }
 
     # =====================================================================
@@ -742,6 +747,35 @@ def create_app(config: Settings | None = None) -> FastAPI:
                     "type": "ok",
                     "msg": f"Pasta monitorada salva.{exists_msg}{watcher_msg}",
                 },
+            },
+        )
+
+    @app.post("/actions/steps", response_class=HTMLResponse)
+    async def change_steps(
+        request: Request,
+        summary: str = Form(None),
+        note: str = Form(None),
+        kanban: str = Form(None),
+        wiki: str = Form(None),
+    ):
+        # Checkbox ausente no POST => desligado.
+        set_pipeline_steps(
+            config,
+            summary=bool(summary),
+            note=bool(note),
+            kanban=bool(kanban),
+            wiki=bool(wiki),
+        )
+        watcher_msg = ""
+        if supervisor.is_running():
+            supervisor.restart()
+            watcher_msg = " Watcher reiniciado para aplicar."
+        return templates.TemplateResponse(
+            request,
+            "_steps.html",
+            {
+                "config": _config_ctx(),
+                "flash": {"type": "ok", "msg": f"Etapas salvas.{watcher_msg}"},
             },
         )
 

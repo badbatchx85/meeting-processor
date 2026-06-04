@@ -63,19 +63,99 @@ def resolve_whisper_model(config: Settings) -> Path | None:
 
 
 class WhisperTranscriber:
-    """Transcreve áudio usando whisper.cpp (aceleração por GPU quando disponível)."""
+    """Transcreve áudio com Whisper.
+
+    Dois backends, escolhidos por ``config.whisper_backend``:
+      - ``cpp``: whisper.cpp (binário; mais rápido com GPU)
+      - ``openai``: openai-whisper (Python puro; baixa o modelo sozinho)
+      - ``auto`` (padrão): usa whisper.cpp se encontrado, senão openai-whisper.
+    """
 
     def __init__(self, config: Settings):
         self.config = config
 
     def transcribe(self, audio_path: Path, progress_callback=None) -> Transcript:
-        """Transcreve um arquivo de áudio via whisper-cli."""
+        """Transcreve um arquivo de áudio escolhendo o backend disponível."""
+        backend = (self.config.whisper_backend or "auto").lower()
+        cli = resolve_whisper_cli(self.config)
+
+        if backend == "openai":
+            return self._transcribe_openai(audio_path, progress_callback)
+        if backend == "cpp":
+            return self._transcribe_cpp(audio_path, progress_callback)
+
+        # auto: whisper.cpp se disponível, senão openai-whisper
+        if cli is not None and resolve_whisper_model(self.config) is not None:
+            return self._transcribe_cpp(audio_path, progress_callback)
+        logger.info("whisper.cpp nao encontrado; usando openai-whisper (pip).")
+        return self._transcribe_openai(audio_path, progress_callback)
+
+    # -- Backend: openai-whisper (Python puro) -------------------------------
+
+    def _transcribe_openai(self, audio_path: Path, progress_callback=None) -> Transcript:
+        try:
+            import whisper  # openai-whisper
+        except ImportError as e:
+            raise RuntimeError(
+                "openai-whisper não instalado. Rode: pip install -r requirements.txt"
+            ) from e
+
+        if progress_callback:
+            progress_callback(5, f"Carregando modelo {self.config.whisper_model}...")
+        logger.info(
+            "Transcrevendo %s com openai-whisper (modelo=%s)...",
+            audio_path.name,
+            self.config.whisper_model,
+        )
+
+        model = whisper.load_model(self.config.whisper_model)
+        if progress_callback:
+            progress_callback(15, "Transcrevendo áudio...")
+
+        result = model.transcribe(
+            str(audio_path),
+            language=self.config.whisper_language,
+            initial_prompt=self.config.whisper_initial_prompt or None,
+        )
+
+        segments = []
+        for seg in result.get("segments", []):
+            text = (seg.get("text") or "").strip()
+            if text:
+                segments.append(
+                    TranscriptSegment(
+                        start=float(seg.get("start", 0.0)),
+                        end=float(seg.get("end", 0.0)),
+                        text=text,
+                    )
+                )
+
+        duration = segments[-1].end if segments else 0.0
+        full_text = " ".join(seg.text for seg in segments)
+        if progress_callback:
+            progress_callback(100, f"{len(segments)} segmentos, {duration/60:.1f} min")
+        logger.info(
+            "Transcrição concluída: %d segmentos, %.1f minutos.",
+            len(segments),
+            duration / 60,
+        )
+        return Transcript(
+            segments=segments,
+            full_text=full_text,
+            language=self.config.whisper_language,
+            duration=duration,
+        )
+
+    # -- Backend: whisper.cpp (binário) --------------------------------------
+
+    def _transcribe_cpp(self, audio_path: Path, progress_callback=None) -> Transcript:
         cli = resolve_whisper_cli(self.config)
         if cli is None:
             raise RuntimeError(
                 "Executável do whisper.cpp não encontrado. Instale o whisper.cpp "
                 "e deixe-o no PATH, coloque o binário em .whisper-cpp/, ou defina "
-                "whisper_cli_path no config.yaml (ou a env MEETING_WHISPER_CLI_PATH)."
+                "whisper_cli_path no config.yaml (ou a env MEETING_WHISPER_CLI_PATH). "
+                "Alternativa sem build: use whisper_backend=openai."
             )
         model = resolve_whisper_model(self.config)
         if model is None:
@@ -86,7 +166,7 @@ class WhisperTranscriber:
             )
 
         if progress_callback:
-            progress_callback(5, "Iniciando whisper.cpp (Vulkan/GPU)...")
+            progress_callback(5, "Iniciando whisper.cpp...")
 
         logger.info("Transcrevendo %s com whisper.cpp...", audio_path.name)
 

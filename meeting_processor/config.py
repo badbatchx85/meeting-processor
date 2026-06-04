@@ -30,6 +30,11 @@ class Settings(BaseModel):
     whisper_language: str = "pt"
     whisper_device: str = "cpu"
     whisper_initial_prompt: str = "Transcrição de reunião em português brasileiro."
+    # Backend de transcrição:
+    #   "auto"   -> usa whisper.cpp se encontrado, senão openai-whisper (pip)
+    #   "cpp"    -> força whisper.cpp (mais rápido com GPU)
+    #   "openai" -> força openai-whisper (Python puro, baixa o modelo sozinho)
+    whisper_backend: str = "auto"
     # Caminhos do whisper.cpp. Vazio => detecta automaticamente no PATH
     # do sistema e em .whisper-cpp/ e .models/ dentro do projeto.
     whisper_cli_path: str = ""
@@ -59,6 +64,17 @@ class Settings(BaseModel):
     # Comum a todos os provedores
     summary_chunk_minutes: int = 5
     max_tokens_summary: int = 4096
+
+    # ---------------------------------------------------------------
+    # Etapas do pipeline (áudio + transcrição sempre rodam)
+    # ---------------------------------------------------------------
+    # Desligar o resumo => modo "só transcrição": salva a transcrição
+    # no vault e para. Nota/Kanban/Wiki dependem do resumo e são
+    # desligados automaticamente quando o resumo está off.
+    enable_summary: bool = True
+    enable_note: bool = True
+    enable_kanban: bool = True
+    enable_wiki: bool = True
 
     # Nota
     default_tags: list[str] = ["meeting", "transcription", "source"]
@@ -104,6 +120,19 @@ class Settings(BaseModel):
     def reunioes_path(self) -> Path:
         return self.vault_path / "wiki" / "reunioes"
 
+    def steps(self) -> dict[str, bool]:
+        """Etapas efetivas, já resolvendo dependências.
+
+        Nota/Kanban/Wiki só fazem sentido com o resumo ligado.
+        """
+        summary = self.enable_summary
+        return {
+            "summary": summary,
+            "note": summary and self.enable_note,
+            "kanban": summary and self.enable_kanban,
+            "wiki": summary and self.enable_wiki,
+        }
+
 
 def load_config(config_path: str | None = None) -> Settings:
     """Carrega configuração do YAML e variáveis de ambiente."""
@@ -127,6 +156,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_WHISPER_MODEL": "whisper_model",
         "MEETING_WHISPER_LANGUAGE": "whisper_language",
         "MEETING_WHISPER_DEVICE": "whisper_device",
+        "MEETING_WHISPER_BACKEND": "whisper_backend",
         "MEETING_WHISPER_CLI_PATH": "whisper_cli_path",
         "MEETING_WHISPER_MODEL_PATH": "whisper_model_path",
         "MEETING_ANTHROPIC_MODEL": "anthropic_model",
@@ -164,6 +194,20 @@ def load_config(config_path: str | None = None) -> Settings:
                 config_data[config_key] = int(env_val)
             except ValueError:
                 pass
+
+    # Etapas do pipeline (booleanos)
+    bool_overrides = {
+        "MEETING_ENABLE_SUMMARY": "enable_summary",
+        "MEETING_ENABLE_NOTE": "enable_note",
+        "MEETING_ENABLE_KANBAN": "enable_kanban",
+        "MEETING_ENABLE_WIKI": "enable_wiki",
+    }
+    for env_key, config_key in bool_overrides.items():
+        env_val = os.environ.get(env_key)
+        if env_val is not None and env_val != "":
+            config_data[config_key] = env_val.strip().lower() in (
+                "1", "true", "yes", "on", "sim",
+            )
 
     config_data["anthropic_api_key"] = os.environ.get("ANTHROPIC_API_KEY", "")
     config_data["project_root"] = str(project_root)

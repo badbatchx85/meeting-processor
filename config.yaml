@@ -16,7 +16,12 @@ watch_extensions:
   - ".webm"
 file_stable_seconds: 10
 
-# Whisper
+# Whisper (transcrição)
+# whisper_backend:
+#   "auto"   -> usa whisper.cpp se encontrado, senão openai-whisper (pip). Padrão.
+#   "openai" -> openai-whisper puro Python; baixa o modelo sozinho (mais simples)
+#   "cpp"    -> força whisper.cpp (mais rápido com GPU; requer binário + modelo .bin)
+whisper_backend: "auto"
 whisper_model: "large"
 whisper_language: "pt"
 whisper_device: "auto"
@@ -59,6 +64,17 @@ kanban_columns:
   todo: "A Fazer"
   in_progress: "Em Progresso"
   done: "Concluído"
+
+# ----------------------------------------------------------
+# Etapas do pipeline (áudio + transcrição rodam sempre)
+# ----------------------------------------------------------
+# Desligue o resumo para o modo "só transcrição".
+# Nota/Kanban/Wiki dependem do resumo. Também editável pela
+# interface web (Configuração > Etapas do processamento).
+enable_summary: true
+enable_note: true
+enable_kanban: true
+enable_wiki: true
 
 # Processamento
 temp_dir: ".tmp"

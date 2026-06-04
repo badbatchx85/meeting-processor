@@ -41,7 +41,8 @@ class MeetingSummary(BaseModel):
 class ProcessingResult(BaseModel):
     source_file: str
     transcript: Transcript
-    summary: MeetingSummary
-    note_path: str
+    # summary/note_path ausentes no modo "só transcrição".
+    summary: MeetingSummary | None = None
+    note_path: str = ""
     raw_path: str
     processing_time: float

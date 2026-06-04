@@ -32,7 +32,14 @@ class ProcessingJob:
         self.error_message: str = ""
         self.details: dict[str, str] = {}
         self.stage_progress: dict[str, int] = {}  # stage_key -> 0-100
+        self.skipped: set[str] = set()
         self.completed_at: datetime | None = None
+
+    def skip(self, stage_key: str, detail: str = "desativada") -> None:
+        """Marca uma etapa como pulada (desligada na configuração)."""
+        self.skipped.add(stage_key)
+        if detail:
+            self.details[stage_key] = detail
 
     def advance(self, stage_key: str, detail: str = "") -> None:
         for i, (key, _) in enumerate(STAGES):
@@ -295,7 +302,9 @@ class Dashboard:
         for i, (key, label) in enumerate(STAGES):
             detail = job.details.get(key, "")
             stage_pct = job.stage_progress.get(key, 0)
-            if i < job.current_stage:
+            if key in job.skipped:
+                lines.append(f"- [ ] ~~{label}~~ *(desativada)*")
+            elif i < job.current_stage:
                 suffix = f" *{detail}*" if detail else ""
                 lines.append(f"- [x] ~~{label}~~ 100%{suffix}")
             elif i == job.current_stage:
