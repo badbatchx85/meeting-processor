@@ -944,6 +944,61 @@ def create_app(config: Settings | None = None) -> FastAPI:
         result = supervisor.restart()
         return {"ok": result["ok"], "error": result.get("error"), "watcher": supervisor.info()}
 
+    @app.post("/api/llm/provider")
+    async def api_set_provider(payload: dict):
+        provider = (payload or {}).get("provider", "")
+        result = set_llm_provider(config, provider)
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Provedor inválido")},
+                status_code=400,
+            )
+        if supervisor.is_running():
+            supervisor.restart()
+        return {
+            "ok": True,
+            "llm": {
+                "provider": config.llm_provider,
+                "label": _provider_label(),
+                "valid_providers": list(VALID_PROVIDERS),
+            },
+        }
+
+    @app.post("/api/config/watch-dir")
+    async def api_set_watch_dir(payload: dict):
+        watch_dir = (payload or {}).get("watch_dir", "")
+        result = set_watch_dir(config, watch_dir)
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Caminho inválido")},
+                status_code=400,
+            )
+        if supervisor.is_running():
+            supervisor.restart()
+        return {"ok": True, "exists": result["exists"], "watch_dir": config.watch_dir}
+
+    @app.post("/api/config/steps")
+    async def api_set_steps(payload: dict):
+        p = payload or {}
+        set_pipeline_steps(
+            config,
+            summary=bool(p.get("summary")),
+            note=bool(p.get("note")),
+            kanban=bool(p.get("kanban")),
+            wiki=bool(p.get("wiki")),
+        )
+        if supervisor.is_running():
+            supervisor.restart()
+        return {
+            "ok": True,
+            "steps": {
+                "summary": config.enable_summary,
+                "note": config.enable_note,
+                "kanban": config.enable_kanban,
+                "wiki": config.enable_wiki,
+            },
+        }
+
     @app.get("/api/llm")
     async def api_llm():
         return {
