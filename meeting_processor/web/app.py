@@ -999,6 +999,40 @@ def create_app(config: Settings | None = None) -> FastAPI:
             },
         }
 
+    @app.post("/api/process")
+    async def api_process(payload: dict):
+        file = (payload or {}).get("file", "")
+        path = Path(file)
+        if not file or not path.exists():
+            return JSONResponse(
+                {"ok": False, "error": f"Arquivo não encontrado: {file}"},
+                status_code=400,
+            )
+
+        def _run():
+            try:
+                from ..pipeline import MeetingPipeline
+
+                MeetingPipeline(config).process(path)
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha ao processar via API")
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "queued": True, "file": str(path)}
+
+    @app.post("/api/history/remove")
+    async def api_history_remove(payload: dict):
+        p = payload or {}
+        result = _remove_history_entry(
+            config.vault_path, p.get("file", ""), p.get("started") or None
+        )
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Não encontrado")},
+                status_code=404,
+            )
+        return {"ok": True}
+
     @app.get("/api/llm")
     async def api_llm():
         return {

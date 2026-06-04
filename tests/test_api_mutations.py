@@ -51,3 +51,25 @@ def test_set_watch_dir_returns_paths(client, tmp_path):
     body = r.json()
     assert body["ok"] is True
     assert body["exists"] is True
+
+
+def test_process_missing_file_returns_400(client):
+    r = client.post("/api/process", json={"file": "/no/such/file.mp4"})
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+
+
+def test_process_existing_file_queues(client, tmp_path, monkeypatch):
+    # Stop the real pipeline from running; just assert it gets queued.
+    class _FakePipeline:
+        def __init__(self, *a, **k): ...
+        def process(self, path): ...
+
+    monkeypatch.setattr("meeting_processor.pipeline.MeetingPipeline", _FakePipeline, raising=False)
+
+    f = tmp_path / "clip.mp4"
+    f.write_bytes(b"x")
+    r = client.post("/api/process", json={"file": str(f)})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert r.json()["queued"] is True
