@@ -1,14 +1,27 @@
 """Tests for SPA serving at /ui with graceful fallback to the HTMX UI."""
+from pathlib import Path
 
 
-def test_root_redirects_to_dashboard_when_build_absent(client):
-    # No SPA build exists in the test tree, so / keeps legacy behavior.
+def test_root_redirects_to_dashboard_when_build_absent(client, monkeypatch, tmp_path):
+    # Monkeypatch spa_serving so the SPA appears absent regardless of build state.
+    from meeting_processor.web import spa_serving
+
+    absent_dir = tmp_path / "spa_absent"
+    monkeypatch.setattr(spa_serving, "SPA_DIR", absent_dir)
+    monkeypatch.setattr(spa_serving, "SPA_INDEX", absent_dir / "index.html")
+
     r = client.get("/", follow_redirects=False)
     assert r.status_code in (302, 307)
     assert r.headers["location"] == "/dashboard"
 
 
-def test_ui_returns_hint_when_build_absent(client):
+def test_ui_returns_hint_when_build_absent(client, monkeypatch, tmp_path):
+    from meeting_processor.web import spa_serving
+
+    absent_dir = tmp_path / "spa_absent"
+    monkeypatch.setattr(spa_serving, "SPA_DIR", absent_dir)
+    monkeypatch.setattr(spa_serving, "SPA_INDEX", absent_dir / "index.html")
+
     r = client.get("/ui", follow_redirects=False)
     assert r.status_code == 200
     assert "npm run build" in r.text

@@ -36,3 +36,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# SPA build output (run `cd frontend && npm run build`)
+meeting_processor/web/spa/
