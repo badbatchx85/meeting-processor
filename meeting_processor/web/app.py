@@ -929,6 +929,21 @@ def create_app(config: Settings | None = None) -> FastAPI:
     async def api_watcher():
         return supervisor.info()
 
+    @app.post("/api/watcher/start")
+    async def api_watcher_start():
+        result = supervisor.start()
+        return {"ok": result["ok"], "error": result.get("error"), "watcher": supervisor.info()}
+
+    @app.post("/api/watcher/stop")
+    async def api_watcher_stop():
+        result = supervisor.stop()
+        return {"ok": result["ok"], "error": result.get("error"), "watcher": supervisor.info()}
+
+    @app.post("/api/watcher/restart")
+    async def api_watcher_restart():
+        result = supervisor.restart()
+        return {"ok": result["ok"], "error": result.get("error"), "watcher": supervisor.info()}
+
     @app.get("/api/llm")
     async def api_llm():
         return {
