@@ -1,0 +1,97 @@
+{% extends "_layout.html" %}
+{% block title %}Configuração · Meeting Processor{% endblock %}
+{% block breadcrumb %}Configuração{% endblock %}
+{% block page_title %}Configuração{% endblock %}
+
+{% block content %}
+
+<!-- WATCHER + LLM ao vivo -->
+<section id="watcher" class="mb-6">
+  <h2 class="text-xs uppercase tracking-wide text-mute mb-2">Watcher e Provedor LLM</h2>
+  <div id="controls">
+    {% include "_controls.html" %}
+  </div>
+</section>
+
+<!-- LLM details -->
+<section id="llm" class="mb-6">
+  <h2 class="text-xs uppercase tracking-wide text-mute mb-2">Detalhes do LLM</h2>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="card p-5">
+      <h3 class="font-semibold mb-3 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full {% if config.llm_provider == 'anthropic' %}bg-accent{% else %}bg-mute{% endif %}"></span>
+        Claude API
+      </h3>
+      <dl class="text-sm space-y-1.5">
+        <div class="flex justify-between border-b border-line pb-1.5"><dt class="text-mute">Modelo</dt><dd class="font-mono">{{ config.anthropic_model }}</dd></div>
+        <div class="flex justify-between border-b border-line pb-1.5"><dt class="text-mute">API key</dt><dd>{% if config.anthropic_key_set %}<span class="text-ok">configurada</span>{% else %}<span class="text-err">ausente</span>{% endif %}</dd></div>
+      </dl>
+      {% if not config.anthropic_key_set %}
+        <p class="text-xs text-err mt-3">
+          ⚠ Defina <span class="font-mono">ANTHROPIC_API_KEY</span> no <span class="font-mono">.env</span>.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="card p-5">
+      <h3 class="font-semibold mb-3 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full {% if config.llm_provider in ['local','ollama'] %}bg-accent{% else %}bg-mute{% endif %}"></span>
+        Ollama (local)
+      </h3>
+      <dl class="text-sm space-y-1.5">
+        <div class="flex justify-between border-b border-line pb-1.5"><dt class="text-mute">Modelo</dt><dd class="font-mono">{{ config.ollama_model }}</dd></div>
+        <div class="flex justify-between border-b border-line pb-1.5"><dt class="text-mute">Base URL</dt><dd class="font-mono text-xs">{{ config.ollama_base_url }}</dd></div>
+        <div class="flex justify-between border-b border-line pb-1.5"><dt class="text-mute">num_ctx</dt><dd>{{ config.ollama_num_ctx }}</dd></div>
+        <div class="flex justify-between"><dt class="text-mute">temperature</dt><dd>{{ config.ollama_temperature }}</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- Whisper -->
+<section id="whisper" class="mb-6">
+  <h2 class="text-xs uppercase tracking-wide text-mute mb-2">Whisper (transcrição)</h2>
+  <div class="card p-5">
+    <dl class="text-sm grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <dt class="text-mute text-xs">Modelo</dt>
+        <dd class="font-mono mt-1">{{ config.whisper_model }}</dd>
+      </div>
+      <div>
+        <dt class="text-mute text-xs">Idioma</dt>
+        <dd class="font-mono mt-1">{{ config.whisper_language }}</dd>
+      </div>
+      <div>
+        <dt class="text-mute text-xs">Device</dt>
+        <dd class="font-mono mt-1">{{ config.whisper_device }}</dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+<!-- Caminhos -->
+<section id="caminhos" class="mb-6">
+  <h2 class="text-xs uppercase tracking-wide text-mute mb-2">Caminhos</h2>
+  <div class="card p-5 space-y-2 text-sm">
+    <div>
+      <div class="text-mute text-xs">Pasta monitorada (OBS)</div>
+      <div class="font-mono text-sm break-all mt-1">{{ config.watch_dir }}</div>
+    </div>
+    <div>
+      <div class="text-mute text-xs">Vault</div>
+      <div class="font-mono text-sm break-all mt-1">{{ config.vault_dir }}</div>
+    </div>
+    <div>
+      <div class="text-mute text-xs">Temp</div>
+      <div class="font-mono text-sm break-all mt-1">{{ config.temp_dir }}</div>
+    </div>
+  </div>
+</section>
+
+<p class="text-xs text-mute">
+  Para alterar valores além de Watcher e Provedor LLM, edite
+  <span class="font-mono">config.yaml</span> ou <span class="font-mono">.env</span>
+  e reinicie o servidor web.
+</p>
+
+{% endblock %}

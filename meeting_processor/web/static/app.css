@@ -1,0 +1,265 @@
+/* =============================================================
+   Meeting Processor — estilos base + light/dark
+   Tailwind via CDN cobre 95% do estilo. Aqui ficam tokens
+   e ajustes que escalam mal via classes utilitárias.
+   ============================================================= */
+
+* { -webkit-font-smoothing: antialiased; }
+
+::selection { background: rgba(124, 92, 255, 0.35); }
+
+/* -------- Light theme overrides ---------------------------- */
+html:not(.dark) body {
+  background: #f7f8fb;
+  color: #0d1220;
+}
+html:not(.dark) .bg-bg       { background: #f7f8fb !important; }
+html:not(.dark) .bg-panel    { background: #ffffff !important; }
+html:not(.dark) .bg-panel-2  { background: #f0f2f7 !important; }
+html:not(.dark) .border-line { border-color: #e3e6ee !important; }
+html:not(.dark) .text-ink    { color: #0d1220 !important; }
+html:not(.dark) .text-mute   { color: #5a6070 !important; }
+html:not(.dark) .bg-bg\/85   { background: rgba(247,248,251,0.9) !important; }
+html:not(.dark) ::-webkit-scrollbar-track { background: #f0f2f7; }
+html:not(.dark) ::-webkit-scrollbar-thumb { background: #d4d8e3; }
+html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #b8bdcc; }
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select { color: #0d1220; }
+
+/* -------- Scrollbar (dark default) ------------------------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0a0c12; }
+::-webkit-scrollbar-thumb { background: #1e2333; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #2b3447; }
+
+/* -------- Sidebar nav items -------------------------------- */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  color: var(--ink, #e7e9f0);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.nav-item:hover {
+  background: rgba(124, 92, 255, 0.08);
+  color: #e7e9f0;
+}
+html:not(.dark) .nav-item:hover { background: rgba(124, 92, 255, 0.10); color: #0d1220; }
+
+.nav-active {
+  background: rgba(124, 92, 255, 0.15);
+  color: #a78bfa;
+  position: relative;
+}
+.nav-active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: #7c5cff;
+}
+html:not(.dark) .nav-active { color: #6d4dff; background: rgba(124, 92, 255, 0.10); }
+
+.nav-sub {
+  display: block;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.25rem;
+  color: #8b93a7;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.nav-sub:hover { color: #e7e9f0; background: rgba(255,255,255,0.04); }
+html:not(.dark) .nav-sub:hover { color: #0d1220; background: rgba(0,0,0,0.04); }
+.nav-sub-active {
+  color: #a78bfa !important;
+  background: rgba(124, 92, 255, 0.10);
+}
+html:not(.dark) .nav-sub-active { color: #6d4dff !important; }
+
+/* -------- Prose ------------------------------------------- */
+.prose { color: inherit; line-height: 1.65; }
+.prose p { margin: 0.6em 0; }
+.prose strong { color: inherit; font-weight: 600; }
+.prose code {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+html:not(.dark) .prose code {
+  background: rgba(0,0,0,0.05);
+  border-color: rgba(0,0,0,0.08);
+}
+
+/* -------- Detalhes / collapses ----------------------------- */
+details > summary { list-style: none; cursor: pointer; }
+details > summary::-webkit-details-marker { display: none; }
+details[open] > summary .chevron { transform: rotate(90deg); }
+.chevron { transition: transform 150ms ease; display: inline-block; }
+
+/* -------- Kanban -------------------------------------------- */
+.kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+@media (max-width: 900px) {
+  .kanban-grid { grid-template-columns: 1fr; }
+}
+
+.kanban-col {
+  background: #10131c;
+  border: 1px solid #1e2333;
+  border-radius: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+}
+html:not(.dark) .kanban-col { background: #ffffff; border-color: #e3e6ee; }
+
+.kanban-col-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1e2333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8b93a7;
+}
+html:not(.dark) .kanban-col-header { border-color: #e3e6ee; color: #5a6070; }
+
+.kanban-col-body {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-height: 100px;
+}
+
+.kanban-card {
+  background: #161a26;
+  border: 1px solid #1e2333;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  cursor: grab;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  user-select: none;
+}
+html:not(.dark) .kanban-card { background: #f8fafc; border-color: #e3e6ee; }
+.kanban-card:hover {
+  border-color: #7c5cff;
+  box-shadow: 0 4px 16px -8px rgba(124,92,255,.4);
+}
+.kanban-card:active { cursor: grabbing; }
+.kanban-card.sortable-ghost {
+  opacity: 0.4;
+  border-style: dashed;
+  background: rgba(124,92,255,0.08);
+}
+.kanban-card.sortable-chosen { box-shadow: 0 8px 24px -8px rgba(124,92,255,.6); }
+
+.kanban-card-title {
+  font-weight: 500;
+  line-height: 1.35;
+  margin-bottom: 0.4rem;
+}
+
+.kanban-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-weight: 500;
+}
+.tag-default { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); color: #8b93a7; }
+html:not(.dark) .tag-default { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); color: #5a6070; }
+.tag-prio-alta   { background: rgba(239,68,68,0.10);  border-color: rgba(239,68,68,0.30);  color: #ef4444; }
+.tag-prio-media  { background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.30); color: #f59e0b; }
+.tag-prio-baixa  { background: rgba(34,197,94,0.10);  border-color: rgba(34,197,94,0.30);  color: #22c55e; }
+.tag-due         { background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.30); color: #3b82f6; }
+.tag-assignee    { background: rgba(124,92,255,0.10); border-color: rgba(124,92,255,0.30); color: #a78bfa; }
+
+/* -------- Cards genéricos ---------------------------------- */
+.card {
+  background: #10131c;
+  border: 1px solid #1e2333;
+  border-radius: 0.625rem;
+}
+html:not(.dark) .card { background: #ffffff; border-color: #e3e6ee; }
+
+/* -------- Stat ---------------------------------------------- */
+.stat {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.25rem;
+}
+.stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: #8b93a7; }
+html:not(.dark) .stat-label { color: #5a6070; }
+.stat-value { font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem; }
+.stat-hint  { font-size: 0.75rem; color: #8b93a7; margin-top: 0.15rem; }
+
+/* -------- Botões refinados --------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 120ms ease;
+  border: 1px solid transparent;
+}
+.btn-primary    { background: #7c5cff; color: #fff; }
+.btn-primary:hover { background: #6d4dff; }
+.btn-ghost      { background: transparent; border-color: #1e2333; color: #e7e9f0; }
+html:not(.dark) .btn-ghost { border-color: #e3e6ee; color: #0d1220; }
+.btn-ghost:hover { background: rgba(124,92,255,0.08); border-color: #7c5cff; }
+.btn-ok      { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.40); color: #22c55e; }
+.btn-ok:hover{ background: rgba(34,197,94,0.25); }
+.btn-err     { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.40); color: #ef4444; }
+.btn-err:hover{ background: rgba(239,68,68,0.25); }
+
+/* -------- Segmented (toggle de provedor) ------------------- */
+.segmented {
+  display: inline-flex;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #1e2333;
+  font-size: 0.85rem;
+}
+html:not(.dark) .segmented { border-color: #e3e6ee; }
+.segmented form { display: contents; }
+.segmented button {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: inherit;
+  transition: background-color 120ms ease;
+  border: none;
+  cursor: pointer;
+}
+.segmented button + button { border-left: 1px solid #1e2333; }
+html:not(.dark) .segmented button + button { border-color: #e3e6ee; }
+.segmented .active {
+  background: rgba(124,92,255,0.15);
+  color: #a78bfa;
+}
+html:not(.dark) .segmented .active { color: #6d4dff; }
+.segmented button:not(.active):hover { background: rgba(255,255,255,0.04); }
+html:not(.dark) .segmented button:not(.active):hover { background: rgba(0,0,0,0.04); }

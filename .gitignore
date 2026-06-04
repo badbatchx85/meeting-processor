@@ -1,0 +1,38 @@
+# Configuração local / segredos
+.env
+.claude/settings.local.json
+
+# Diretórios runtime
+.tmp/
+.processed/
+.models/
+.whisper-cpp/
+
+# Conteúdo do usuário (vault não é versionado por padrão)
+# Comente a linha abaixo se quiser versionar templates e estrutura
+vault/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Áudio temporário
+*.wav
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

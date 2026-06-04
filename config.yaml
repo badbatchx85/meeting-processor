@@ -1,0 +1,62 @@
+# Meeting Processor - Configuração
+# ================================
+
+# Caminhos
+watch_dir: "C:\\Users\\Pichau\\Videos\\OBS"
+vault_dir: "./vault"
+
+# Monitoramento de arquivos
+watch_extensions:
+  - ".mkv"
+  - ".mp4"
+  - ".webm"
+file_stable_seconds: 10
+
+# Whisper
+whisper_model: "large"
+whisper_language: "pt"
+whisper_device: "auto"
+whisper_initial_prompt: "Transcrição de reunião em português brasileiro."
+
+# ----------------------------------------------------------
+# Provedor de LLM (resumo da reunião)
+# ----------------------------------------------------------
+# Valores: "anthropic" (Claude API) ou "local" (Ollama)
+# Pode ser sobrescrito por env var: MEETING_LLM_PROVIDER
+llm_provider: "anthropic"
+
+# Claude API
+anthropic_model: "claude-sonnet-4-20250514"
+
+# Ollama (LLM local) — usado quando llm_provider == "local"
+# Requer Ollama instalado e o modelo baixado:
+#   ollama pull qwen2.5:14b
+# Veja docs/llm-local.md
+ollama_base_url: "http://localhost:11434"
+ollama_model: "qwen2.5:14b"
+ollama_temperature: 0.2
+ollama_num_ctx: 16384
+ollama_request_timeout: 600.0
+
+# Comum a todos os provedores
+summary_chunk_minutes: 5
+max_tokens_summary: 4096
+
+# Nota de reunião
+default_tags:
+  - meeting
+  - transcription
+  - source
+note_status: "mature"
+
+# Kanban
+kanban_file: "wiki/kanban-reunioes.md"
+kanban_columns:
+  todo: "A Fazer"
+  in_progress: "Em Progresso"
+  done: "Concluído"
+
+# Processamento
+temp_dir: ".tmp"
+cleanup_temp: true
+log_level: "INFO"

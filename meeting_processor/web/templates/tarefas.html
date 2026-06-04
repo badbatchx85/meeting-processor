@@ -1,0 +1,131 @@
+{% extends "_layout.html" %}
+{% block title %}Tarefas · Kanban{% endblock %}
+{% block breadcrumb %}Tarefas / Kanban{% endblock %}
+{% block page_title %}Quadro Kanban{% endblock %}
+
+{% block content %}
+
+<!-- Filtros + Export -->
+<div class="card mb-5">
+  <div class="p-4 flex flex-wrap items-center gap-3 text-sm">
+
+    <form method="get" action="/tarefas" class="flex flex-wrap items-center gap-3 flex-1">
+      <input type="hidden" name="view" value="kanban" />
+
+      <label class="flex items-center gap-2">
+        <span class="text-mute text-xs uppercase tracking-wide">Responsável</span>
+        <select name="assignee" class="bg-bg border border-line rounded px-2 py-1 text-sm">
+          <option value="">— todos —</option>
+          {% for a in assignees %}
+            <option value="{{ a }}" {% if filter.assignee == a %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="flex items-center gap-2">
+        <span class="text-mute text-xs uppercase tracking-wide">Reunião</span>
+        <select name="meeting" class="bg-bg border border-line rounded px-2 py-1 text-sm max-w-xs">
+          <option value="">— todas —</option>
+          {% for mid in meetings_idx %}
+            <option value="{{ mid }}" {% if filter.meeting == mid %}selected{% endif %}>{{ mid[:50] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <button class="btn btn-primary text-sm">Aplicar</button>
+      <a href="/tarefas" class="text-xs text-mute hover:text-ink">Limpar</a>
+    </form>
+
+    {% include "_export_menu.html" %}
+
+  </div>
+
+  <div class="px-4 pb-3 -mt-1 text-xs text-mute">
+    Arraste cards entre colunas para mudar o status — salvo automaticamente.
+  </div>
+</div>
+
+<!-- Quadro -->
+<div id="kanban-board" class="kanban-grid">
+  {% include "_kanban_board.html" %}
+</div>
+
+<!-- Toast de feedback -->
+<div id="toast" class="fixed bottom-6 right-6 px-4 py-2 rounded-lg shadow-soft text-sm hidden z-50"></div>
+
+<script>
+(function () {
+  // ----- Toast helper ------------------------------------------------
+  function toast(msg, type) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'fixed bottom-6 right-6 px-4 py-2 rounded-lg shadow-soft text-sm z-50 ' +
+      (type === 'err'
+        ? 'bg-err/20 text-err border border-err/40'
+        : 'bg-ok/20 text-ok border border-ok/40');
+    setTimeout(function () { el.classList.add('hidden'); }, 3500);
+  }
+
+  // ----- Sortable nas três colunas ----------------------------------
+  function initSortable() {
+    if (typeof Sortable === 'undefined') {
+      // Sortable ainda não carregou, tenta de novo
+      setTimeout(initSortable, 100);
+      return;
+    }
+
+    document.querySelectorAll('.kanban-col-body').forEach(function (col) {
+      Sortable.create(col, {
+        group: 'tasks',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onEnd: function (evt) {
+          if (evt.from === evt.to) return;  // moveu dentro da mesma col
+          var card = evt.item;
+          var taskId = card.dataset.taskId;
+          var meetingId = card.dataset.meetingId;
+          var toCol = evt.to.dataset.column;
+
+          fetch('/actions/tasks/move', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({task_id: taskId, meeting_id: meetingId, to_column: toCol}),
+          })
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (data) {
+            toast('Tarefa movida para "' + toCol + '"', 'ok');
+            updateColumnCounts();
+          })
+          .catch(function (err) {
+            toast('Falha ao mover: ' + err.message + '. Revertendo.', 'err');
+            // Reverte (reinsere no original)
+            evt.from.insertBefore(card, evt.from.children[evt.oldIndex]);
+          });
+        }
+      });
+    });
+  }
+
+  function updateColumnCounts() {
+    document.querySelectorAll('.kanban-col').forEach(function (col) {
+      var body = col.querySelector('.kanban-col-body');
+      var count = body ? body.querySelectorAll('.kanban-card').length : 0;
+      var badge = col.querySelector('.kanban-count');
+      if (badge) badge.textContent = count;
+    });
+  }
+
+  // Inicializa quando o DOM e Sortable estiverem prontos
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSortable);
+  } else {
+    initSortable();
+  }
+})();
+</script>
+
+{% endblock %}
