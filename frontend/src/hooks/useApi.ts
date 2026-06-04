@@ -5,7 +5,11 @@ import type {
 } from "../api/types";
 
 export const useHealth = () =>
-  useQuery({ queryKey: ["health"], queryFn: () => api.get<Health>("/api/health") });
+  useQuery({
+    queryKey: ["health"],
+    queryFn: () => api.get<Health>("/api/health"),
+    refetchInterval: 3000,
+  });
 
 export const useWatcher = () =>
   useQuery({
