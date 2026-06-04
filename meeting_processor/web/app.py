@@ -417,10 +417,11 @@ def create_app(config: Settings | None = None) -> FastAPI:
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-    if spa_serving.SPA_DIR.exists():
+    _spa_assets = spa_serving.SPA_DIR / "assets"
+    if _spa_assets.exists():
         app.mount(
             "/ui/assets",
-            StaticFiles(directory=str(spa_serving.SPA_DIR / "assets")),
+            StaticFiles(directory=str(_spa_assets)),
             name="spa-assets",
         )
 
@@ -494,7 +495,7 @@ def create_app(config: Settings | None = None) -> FastAPI:
         return spa_serving.spa_index_response()
 
     @app.get("/ui/{full_path:path}", response_class=HTMLResponse)
-    async def spa_catch_all(full_path: str):
+    async def spa_catch_all(full_path: str):  # noqa: ARG001 - path served by SPA shell
         return spa_serving.spa_index_response()
 
     # ---- Dashboard ------------------------------------------------------

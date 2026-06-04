@@ -1,3 +1,6 @@
+"""Tests for SPA serving at /ui with graceful fallback to the HTMX UI."""
+
+
 def test_root_redirects_to_dashboard_when_build_absent(client):
     # No SPA build exists in the test tree, so / keeps legacy behavior.
     r = client.get("/", follow_redirects=False)
