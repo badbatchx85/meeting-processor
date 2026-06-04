@@ -73,3 +73,11 @@ def test_process_existing_file_queues(client, tmp_path, monkeypatch):
     assert r.status_code == 200
     assert r.json()["ok"] is True
     assert r.json()["queued"] is True
+
+
+def test_process_rejects_unsupported_extension(client, tmp_path):
+    f = tmp_path / "notes.txt"
+    f.write_text("hi")
+    r = client.post("/api/process", json={"file": str(f)})
+    assert r.status_code == 400
+    assert r.json()["ok"] is False

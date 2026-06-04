@@ -1008,6 +1008,18 @@ def create_app(config: Settings | None = None) -> FastAPI:
                 {"ok": False, "error": f"Arquivo não encontrado: {file}"},
                 status_code=400,
             )
+        # defesa: só arquivos de mídia suportados
+        if not path.is_file():
+            return JSONResponse(
+                {"ok": False, "error": "Caminho não é um arquivo."},
+                status_code=400,
+            )
+        allowed_ext = {e.lower() for e in config.watch_extensions}
+        if allowed_ext and path.suffix.lower() not in allowed_ext:
+            return JSONResponse(
+                {"ok": False, "error": f"Extensão não suportada: {path.suffix}"},
+                status_code=400,
+            )
 
         def _run():
             try:
