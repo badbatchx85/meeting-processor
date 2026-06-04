@@ -1,3 +1,6 @@
+{# Os botões abaixo trocam #controls com hx-swap="innerHTML": o id="controls"
+   fica na div externa da página que inclui este fragmento (dashboard/configuração),
+   então o alvo sobrevive a trocas repetidas. (outerHTML apagaria o alvo no 1º clique.) #}
 <div class="card p-5">
 
   {% if flash %}
@@ -33,14 +36,14 @@
 
       <div class="flex flex-wrap gap-2">
         {% if supervisor.running %}
-          <button hx-post="/actions/watcher/stop" hx-target="#controls" hx-swap="outerHTML" class="btn btn-err">
+          <button hx-post="/actions/watcher/stop" hx-target="#controls" hx-swap="innerHTML" class="btn btn-err">
             Parar
           </button>
-          <button hx-post="/actions/watcher/restart" hx-target="#controls" hx-swap="outerHTML" class="btn btn-ghost">
+          <button hx-post="/actions/watcher/restart" hx-target="#controls" hx-swap="innerHTML" class="btn btn-ghost">
             Reiniciar
           </button>
         {% else %}
-          <button hx-post="/actions/watcher/start" hx-target="#controls" hx-swap="outerHTML" class="btn btn-ok">
+          <button hx-post="/actions/watcher/start" hx-target="#controls" hx-swap="innerHTML" class="btn btn-ok">
             Iniciar
           </button>
         {% endif %}
@@ -61,7 +64,7 @@
 
       <div class="segmented flex-wrap">
         {% for p, lbl in [('anthropic','Claude'), ('openai','OpenAI'), ('gemini','Gemini'), ('local','Ollama'), ('none','Sem IA')] %}
-        <form hx-post="/actions/llm-provider" hx-target="#controls" hx-swap="outerHTML">
+        <form hx-post="/actions/llm-provider" hx-target="#controls" hx-swap="innerHTML">
           <input type="hidden" name="provider" value="{{ p }}" />
           <button type="submit" class="{% if config.llm_provider == p or (p == 'local' and config.llm_provider == 'ollama') %}active{% endif %}">
             {{ lbl }}
