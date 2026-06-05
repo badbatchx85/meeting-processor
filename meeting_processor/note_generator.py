@@ -221,7 +221,7 @@ purpose: "{summary.purpose}"
                 body_parts.append(task_line)
             body_parts.append("")
             body_parts.append("> [!tip] Quadro visual")
-            body_parts.append("> Veja as tarefas no formato Kanban: [[{tarefas_link}|Tarefas]]")
+            body_parts.append(f"> Veja as tarefas no formato Kanban: [[{tarefas_link}|Tarefas]]")
         else:
             body_parts.append("Nenhuma tarefa identificada nesta reuniao.")
         body_parts.append("")
@@ -236,7 +236,7 @@ purpose: "{summary.purpose}"
         # Link para transcrição
         body_parts.append("## Transcricao Completa\n")
         body_parts.append("> [!info] Transcricao original")
-        body_parts.append("> [[{transcricao_link}|Transcricao]]")
+        body_parts.append(f"> [[{transcricao_link}|Transcricao]]")
         body_parts.append("")
 
         return "\n".join(body_parts)

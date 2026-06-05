@@ -123,3 +123,37 @@ def test_note_omits_empty_new_sections(tmp_path):
     assert "## Decisões" not in note
     assert "## Questões em Aberto" not in note
     assert "**Tipo:** " not in note
+
+
+def test_note_resolves_kanban_and_transcript_links(tmp_path):
+    from datetime import datetime
+    from meeting_processor.config import load_config
+    from meeting_processor.models import ActionItem, MeetingSummary, Transcript
+    from meeting_processor.note_generator import NoteGenerator
+
+    cfg = load_config()
+    cfg.project_root = str(tmp_path)
+    cfg.vault_dir = "vault"
+    summary = MeetingSummary(
+        executive_summary="x",
+        time_windows=[],
+        action_items=[ActionItem(description="Fazer algo")],
+        participants=[], key_topics=[],
+    )
+    gen = NoteGenerator(cfg)
+    paths = gen.prepare("reuniao.mp4", datetime(2026, 6, 4, 10, 0))
+    note = gen._build_note(
+        title=paths.folder_name,
+        summary=summary,
+        transcript=Transcript(segments=[], full_text="", language="pt", duration=1.0),
+        source_file="reuniao.mp4",
+        date_str="2026-06-04",
+        created_at=datetime(2026, 6, 4, 10, 0),
+        tarefas_link=paths.tarefas_name,
+        transcricao_link=paths.transcricao_name,
+    )
+    # No unresolved f-string placeholders leaked into the note:
+    assert "{tarefas_link}" not in note
+    assert "{transcricao_link}" not in note
+    # The Kanban tip link resolved to the real Tarefas note name:
+    assert f"[[{paths.tarefas_name}|Tarefas]]" in note
