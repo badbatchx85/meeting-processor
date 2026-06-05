@@ -88,3 +88,27 @@ def test_transcribe_existing_no_source_logs_error(config, tmp_path):
     entries = generation_log.read(config.reunioes_path / mid)
     assert entries and entries[0]["action"] == "transcript" and entries[0]["status"] == "error"
     assert "não encontrado" in entries[0]["error"]
+
+
+def test_summarize_existing_appends_log(config, tmp_path, monkeypatch):
+    from meeting_processor import generation_log
+    from meeting_processor.models import ActionItem, MeetingSummary
+    from meeting_processor.pipeline import MeetingPipeline
+
+    mid = _make_meeting(config, "reuniao.mp4")
+
+    class _FakeSummarizer:
+        def __init__(self, *a, **k): ...
+        def summarize(self, transcript, source_filename):
+            return MeetingSummary(
+                executive_summary="ok", time_windows=[],
+                action_items=[ActionItem(description="x", assignee="y")],
+                participants=["y"], key_topics=["k"], purpose="p",
+                meeting_type="status", decisions=[], open_questions=[],
+            )
+
+    monkeypatch.setattr("meeting_processor.pipeline.MeetingSummarizer", lambda cfg: _FakeSummarizer())
+    MeetingPipeline(config).summarize_existing(mid)
+
+    entries = generation_log.read(config.reunioes_path / mid)
+    assert entries and entries[0]["action"] == "summary" and entries[0]["status"] == "ok"

@@ -282,13 +282,23 @@ class MeetingPipeline:
         for key in ("audio", "transcription"):
             job.advance(key)
             job.set_progress(key, 100)
+        started = datetime.now()
         try:
             self._summarize(transcript, paths, meeting_id, created_at, job, steps)
             job.complete("resumo gerado a partir da transcrição")
             self.dashboard.update(job)
+            generation_log.append(
+                meeting_dir, "summary", "ok",
+                detail="resumo gerado a partir da transcrição",
+                started=started, completed=datetime.now(),
+            )
         except Exception as e:
             job.fail(str(e))
             self.dashboard.update(job)
+            generation_log.append(
+                meeting_dir, "summary", "error", error=str(e),
+                started=started, completed=datetime.now(),
+            )
             raise
 
     def transcribe_existing(self, meeting_id: str) -> None:
