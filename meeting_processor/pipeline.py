@@ -1,12 +1,14 @@
 """Orquestrador do pipeline de processamento de reuniões."""
 
 import logging
+import re
 import time
 from datetime import datetime
 from pathlib import Path
 
 from .audio import extract_audio, get_duration
 from .config import Settings
+from . import generation_log
 from .dashboard import Dashboard
 from .kanban import KanbanManager
 from .models import MeetingSummary, ProcessingResult, Transcript
@@ -17,6 +19,36 @@ from .utils import format_duration
 from .wiki_integrator import WikiIntegrator
 
 logger = logging.getLogger(__name__)
+
+_FOLDER_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}h\d{2} - (.+)$")
+
+
+def locate_source_file(config: Settings, meeting_dir: Path) -> Path | None:
+    """Encontra o arquivo de mídia que originou a transcrição da reunião.
+
+    O nome da pasta é ``"<data> <hora> - <stem-do-arquivo>"`` e o stem é sempre
+    igual ao do arquivo original (``NoteGenerator.prepare`` usa ``Path(src).stem``).
+    Procura em ``uploads/`` e no ``watch_dir`` por um arquivo com esse stem e uma
+    extensão suportada. Devolve o primeiro encontrado ou ``None``.
+    """
+    m = _FOLDER_PREFIX_RE.match(meeting_dir.name)
+    stem = m.group(1) if m else meeting_dir.name
+    exts = {e.lower() for e in config.watch_extensions}
+    roots = [Path(config.project_root) / "uploads", config.watch_path]
+    for root in roots:
+        try:
+            if not root.is_dir():
+                continue
+            for entry in root.iterdir():
+                if (
+                    entry.is_file()
+                    and entry.stem == stem
+                    and (not exts or entry.suffix.lower() in exts)
+                ):
+                    return entry
+        except OSError:
+            continue
+    return None
 
 
 class MeetingPipeline:
@@ -33,7 +65,7 @@ class MeetingPipeline:
         self.wiki = WikiIntegrator(config)
         self.dashboard = Dashboard(config)
 
-    def process(self, video_path: Path) -> ProcessingResult:
+    def process(self, video_path: Path, transcript_only: bool = False) -> ProcessingResult:
         """Processa um arquivo de vídeo de reunião completo.
 
         Atualiza o dashboard no Obsidian a cada etapa para
@@ -47,6 +79,8 @@ class MeetingPipeline:
         """
         start_time = time.time()
         steps = self.config.steps()
+        if transcript_only:
+            steps = {"summary": False, "note": False, "kanban": False, "wiki": False}
         mode = "completa" if steps["summary"] else "so transcricao"
         logger.info("=" * 60)
         logger.info("Processando reuniao (%s): %s", mode, video_path.name)
@@ -248,14 +282,87 @@ class MeetingPipeline:
         for key in ("audio", "transcription"):
             job.advance(key)
             job.set_progress(key, 100)
+        started = datetime.now()
         try:
             self._summarize(transcript, paths, meeting_id, created_at, job, steps)
             job.complete("resumo gerado a partir da transcrição")
             self.dashboard.update(job)
+            generation_log.append(
+                meeting_dir, "summary", "ok",
+                detail="resumo gerado a partir da transcrição",
+                started=started, completed=datetime.now(),
+            )
         except Exception as e:
             job.fail(str(e))
             self.dashboard.update(job)
+            generation_log.append(
+                meeting_dir, "summary", "error", error=str(e),
+                started=started, completed=datetime.now(),
+            )
             raise
+
+    def transcribe_existing(self, meeting_id: str) -> None:
+        """Re-transcreve uma reunião já existente (só transcrição, sem resumo).
+
+        Localiza o arquivo de origem, roda áudio+Whisper, sobrescreve a
+        transcrição salva e registra o resultado no log de geração da reunião.
+        Se a origem sumiu, registra um erro no log e retorna (sem exceção).
+        """
+        base = self.config.reunioes_path.resolve()
+        meeting_dir = (base / meeting_id).resolve()
+        if meeting_dir.parent != base or not meeting_dir.is_dir():
+            raise FileNotFoundError(f"Reunião inválida: {meeting_id}")
+
+        started = datetime.now()
+        source = locate_source_file(self.config, meeting_dir)
+        if source is None:
+            generation_log.append(
+                meeting_dir,
+                "transcript",
+                "error",
+                error=f"Arquivo de origem não encontrado: {meeting_dir.name}",
+                started=started,
+                completed=datetime.now(),
+            )
+            logger.warning("Re-transcrição: origem não encontrada para %s", meeting_id)
+            return
+
+        logger.info("Re-transcrevendo %s (origem: %s)", meeting_id, source.name)
+        job = self.dashboard.new_job(meeting_id)
+        for key in ("summary", "note", "kanban", "wiki"):
+            job.skip(key)
+        job.advance("audio", "Convertendo video para WAV 16kHz")
+        job.set_progress("audio", 10)
+        self.dashboard.update(job)
+        audio_path = extract_audio(source, self.config)
+        try:
+            job.set_progress("audio", 100)
+            job.advance("transcription", f"Modelo: {self.config.whisper_model}")
+            job.set_progress("transcription", 5, "Carregando modelo...")
+            self.dashboard.update(job)
+            transcript = self.transcriber.transcribe(
+                audio_path, progress_callback=self._make_progress_cb(job)
+            )
+            paths = self.note_generator.paths_for_existing(meeting_dir)
+            self.note_generator.write_transcription(transcript, paths)
+            detail = f"{len(transcript.segments)} segmentos, {format_duration(transcript.duration)}"
+            job.complete(f"So transcricao | {detail}")
+            self.dashboard.update(job)
+            generation_log.append(
+                meeting_dir, "transcript", "ok", detail=detail,
+                started=started, completed=datetime.now(),
+            )
+        except Exception as e:
+            job.fail(str(e))
+            self.dashboard.update(job)
+            generation_log.append(
+                meeting_dir, "transcript", "error", error=str(e),
+                started=started, completed=datetime.now(),
+            )
+            raise
+        finally:
+            if self.config.cleanup_temp and audio_path.exists():
+                audio_path.unlink()
 
     def _llm_labels(self) -> tuple[str, str]:
         """Retorna (label do provedor, label do modelo) para logs/dashboard."""

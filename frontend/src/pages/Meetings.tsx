@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Trash2, Search } from "lucide-react";
+import { Trash2, Search, FileText, Sparkles } from "lucide-react";
 import { Card } from "../components/Card";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
-import { useMeetings, useDeleteMeeting, useHistory } from "../hooks/useApi";
+import { useMeetings, useDeleteMeeting, useHistory, useTranscribeMeeting, useSummarizeMeeting } from "../hooks/useApi";
 import { ConversionHistory } from "../components/ConversionHistory";
 import { ApiError } from "../api/client";
 
@@ -13,11 +13,24 @@ export function Meetings() {
   const meetings = useMeetings();
   const history = useHistory();
   const del = useDeleteMeeting();
+  const transcribe = useTranscribeMeeting();
+  const summarize = useSummarizeMeeting();
   const toast = useToast();
   const [q, setQ] = useState("");
   const [pending, setPending] = useState<string | null>(null);
 
   const items = (meetings.data ?? []).filter((m) => m.title.toLowerCase().includes(q.toLowerCase()));
+
+  const runTranscribe = (id: string) =>
+    transcribe.mutate(id, {
+      onSuccess: () => toast("ok", "Gerando transcrição — acompanhe no Dashboard."),
+      onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
+    });
+  const runSummarize = (id: string) =>
+    summarize.mutate(id, {
+      onSuccess: () => toast("ok", "Gerando resumo — acompanhe no Dashboard."),
+      onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
+    });
 
   const confirmDelete = () => {
     if (!pending) return;
@@ -61,7 +74,23 @@ export function Meetings() {
                 <td className="text-slate-500">{m.duration || "—"}</td>
                 <td className="text-slate-500">{m.task_count}</td>
                 <td className="text-right">
-                  <button onClick={() => setPending(m.id)} className="text-slate-400 hover:text-rose-600"><Trash2 size={16} /></button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={() => runTranscribe(m.id)} disabled={transcribe.isPending}
+                      aria-label={`Gerar transcrição da ${m.title}`} title="Gerar transcrição"
+                      className="text-slate-400 hover:text-brand disabled:opacity-40">
+                      <FileText size={16} />
+                    </button>
+                    <button onClick={() => runSummarize(m.id)} disabled={summarize.isPending}
+                      aria-label={`Gerar resumo da ${m.title}`} title="Gerar resumo"
+                      className="text-slate-400 hover:text-brand disabled:opacity-40">
+                      <Sparkles size={16} />
+                    </button>
+                    <button onClick={() => setPending(m.id)}
+                      aria-label={`Apagar ${m.title}`} title="Apagar"
+                      className="text-slate-400 hover:text-rose-600">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

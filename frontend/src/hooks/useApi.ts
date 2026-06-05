@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import type {
   Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse, Config,
-  HistoryEntry, LocalModels, PullStatus,
+  HistoryEntry, LocalModels, PullStatus, GenerationLogEntry, SourceInfo,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -129,7 +129,8 @@ export function useSetWatchDir() {
 export function useProcessFile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: string) => api.post("/api/process", { file }),
+    mutationFn: (v: { file: string; mode?: string }) =>
+      api.post("/api/process", { file: v.file, mode: v.mode ?? "full" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings"] }),
   });
 }
@@ -138,8 +139,12 @@ export function useUploadFile() {
   const qc = useQueryClient();
   const [progress, setProgress] = useState<number | null>(null);
   const mutation = useMutation({
-    mutationFn: (file: File) =>
-      uploadFile("/api/process/upload", file, setProgress),
+    mutationFn: (v: { file: File; mode?: string }) =>
+      uploadFile(
+        `/api/process/upload?mode=${encodeURIComponent(v.mode ?? "full")}`,
+        v.file,
+        setProgress,
+      ),
     onMutate: () => setProgress(0),
     onSettled: () => setProgress(null),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings"] }),
@@ -160,10 +165,52 @@ export function useSummarizeMeeting() {
   return useMutation({
     mutationFn: (id: string) =>
       api.post(`/api/meetings/${encodeURIComponent(id)}/summarize`),
-    onSuccess: () => {
+    onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["status"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });
       qc.invalidateQueries({ queryKey: ["history"] });
+      qc.invalidateQueries({ queryKey: ["meeting-log", id] });
+    },
+  });
+}
+
+export function useTranscribeMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/api/meetings/${encodeURIComponent(id)}/transcribe`),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["status"] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["history"] });
+      qc.invalidateQueries({ queryKey: ["meeting-log", id] });
+    },
+  });
+}
+
+export const useGenerationLog = (id: string) =>
+  useQuery({
+    queryKey: ["meeting-log", id],
+    queryFn: () => api.get<GenerationLogEntry[]>(`/api/meetings/${encodeURIComponent(id)}/log`),
+    enabled: !!id,
+    refetchInterval: 4000,
+  });
+
+export const useMeetingSource = (id: string) =>
+  useQuery({
+    queryKey: ["meeting-source", id],
+    queryFn: () => api.get<SourceInfo>(`/api/meetings/${encodeURIComponent(id)}/source`),
+    enabled: !!id,
+  });
+
+export function useDeleteMeetingSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.del(`/api/meetings/${encodeURIComponent(id)}/source`),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["meeting-source", id] });
+      qc.invalidateQueries({ queryKey: ["meeting-log", id] });
     },
   });
 }

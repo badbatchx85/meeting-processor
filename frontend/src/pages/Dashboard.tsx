@@ -33,10 +33,11 @@ export function Dashboard() {
   const qc = useQueryClient();
   const [file, setFile] = useState("");
   const [selected, setSelected] = useState<File | null>(null);
+  const [transcriptOnly, setTranscriptOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Quando um job termina (lista de ativos esvazia), recarrega as reuniões.
-  const activeCount = status.data?.active.length ?? 0;
+  const activeCount = status.data?.active?.length ?? 0;
   const prevActive = useRef(0);
   useEffect(() => {
     if (prevActive.current > 0 && activeCount === 0) {
@@ -48,22 +49,28 @@ export function Dashboard() {
 
   const submit = () => {
     if (!file.trim()) return;
-    process.mutate(file.trim(), {
-      onSuccess: () => { toast("ok", "Processamento enfileirado."); setFile(""); },
-      onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
-    });
+    process.mutate(
+      { file: file.trim(), mode: transcriptOnly ? "transcript" : "full" },
+      {
+        onSuccess: () => { toast("ok", "Processamento enfileirado."); setFile(""); },
+        onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
+      },
+    );
   };
 
   const submitUpload = () => {
     if (!selected) return;
-    upload.mutate(selected, {
-      onSuccess: () => {
-        toast("ok", "Arquivo enviado — processando.");
-        setSelected(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
+    upload.mutate(
+      { file: selected, mode: transcriptOnly ? "transcript" : "full" },
+      {
+        onSuccess: () => {
+          toast("ok", "Arquivo enviado — processando.");
+          setSelected(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        },
+        onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro no envio"),
       },
-      onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro no envio"),
-    });
+    );
   };
 
   return (
@@ -88,6 +95,11 @@ export function Dashboard() {
 
       <Card title="Processar um arquivo">
         <div className="flex flex-col gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={transcriptOnly}
+              onChange={(e) => setTranscriptOnly(e.target.checked)} />
+            Apenas transcrição (sem resumo)
+          </label>
           {/* Enviar do computador */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-slate-600">Enviar do seu computador</label>
@@ -130,11 +142,11 @@ export function Dashboard() {
         </div>
       </Card>
 
-      {status.data && status.data.active.length > 0 && (
+      {status.data && status.data.active?.length > 0 && (
         <div className="lg:col-span-2">
           <Card title="Em processamento">
             <div className="flex flex-col gap-6">
-              {status.data.active.map((job) => (
+              {status.data.active?.map((job) => (
                 <ProcessingStepper key={job.file} job={job} />
               ))}
             </div>
