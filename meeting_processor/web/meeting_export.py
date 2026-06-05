@@ -13,7 +13,14 @@ _TRANSCRIPT_HEADING = "## Transcricao Completa"
 
 
 def to_markdown(meeting: dict) -> str:
-    """Return the summary body, trimming the trailing Obsidian transcript link."""
+    """Return the meeting's summary as Markdown, minus the transcript section.
+
+    ``resumo_md`` (the Resumo note body) already carries the title, the
+    ``**Tipo:**``/``**Participantes:**`` quick-info, ``## Propósito``, the
+    executive summary, ``## Decisões``, ``## Tarefas Identificadas`` and
+    ``## Questões em Aberto`` — so no recomposition from ``meta``/``tasks`` is
+    needed. We only trim the trailing ``## Transcricao Completa`` Obsidian link.
+    """
     body = meeting.get("resumo_md", "") or ""
     idx = body.find(_TRANSCRIPT_HEADING)
     if idx != -1:
