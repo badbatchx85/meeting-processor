@@ -101,3 +101,51 @@ def test_export_docx_returns_valid_document(client, config):
 def test_export_docx_missing_meeting_404(client):
     r = client.get("/api/meetings/nope/export.docx")
     assert r.status_code == 404
+
+
+def test_export_roundtrip_from_real_note(client, config):
+    from datetime import datetime
+    from meeting_processor.models import (
+        ActionItem, MeetingSummary, Transcript, TranscriptSegment,
+    )
+    from meeting_processor.note_generator import NoteGenerator
+
+    transcript = Transcript(
+        segments=[TranscriptSegment(start=0.0, end=5.0, text="Olá pessoal.")],
+        full_text="Olá pessoal.", language="pt", duration=5.0,
+    )
+    summary = MeetingSummary(
+        executive_summary="Resumo.",
+        time_windows=[],
+        action_items=[ActionItem(description="Preparar deck")],
+        participants=["Ana"],
+        key_topics=["Roadmap"],
+        purpose="Alinhar o roadmap",
+        meeting_type="planejamento",
+        decisions=["Adiar o lançamento"],
+        open_questions=["Quem assume o suporte?"],
+    )
+    gen = NoteGenerator(config)
+    created = datetime(2026, 6, 4, 10, 0)
+    paths = gen.prepare("reuniao.mp4", created)
+    gen.write_transcription(transcript, paths)
+    gen.write_summary_note(transcript, summary, "reuniao.mp4", created, paths)
+    gen.write_group_note(paths, has_summary=True)
+
+    mid = paths.folder_name
+
+    r = client.get(f"/api/meetings/{mid}/export.md")
+    assert r.status_code == 200
+    body = r.text
+    assert "Alinhar o roadmap" in body
+    assert "## Decisões" in body
+    assert "- Adiar o lançamento" in body
+    assert "## Questões em Aberto" in body
+    assert "## Transcricao Completa" not in body
+    assert "{tarefas_link}" not in body  # f-string fix holds end-to-end
+
+    r2 = client.get(f"/api/meetings/{mid}/export.docx")
+    assert r2.status_code == 200
+    assert r2.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
