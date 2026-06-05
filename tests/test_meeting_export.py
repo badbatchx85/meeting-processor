@@ -59,3 +59,21 @@ def test_list_meetings_includes_type_and_purpose(client, config):
     m = r.json()[0]
     assert m["meeting_type"] == "planejamento"
     assert m["purpose"] == "Alinhar o roadmap"
+
+
+def test_export_md_returns_summary_without_transcript_link(client, config):
+    mid = _write_meeting(config.vault_path)
+    r = client.get(f"/api/meetings/{mid}/export.md")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/markdown")
+    assert "attachment" in r.headers.get("content-disposition", "")
+    body = r.text
+    assert "Alinhar o roadmap" in body          # purpose
+    assert "- Adiar o lançamento" in body        # decision
+    assert "Quem assume o suporte?" in body       # open question
+    assert "## Transcricao Completa" not in body  # transcript link stripped
+
+
+def test_export_md_missing_meeting_404(client):
+    r = client.get("/api/meetings/nope/export.md")
+    assert r.status_code == 404

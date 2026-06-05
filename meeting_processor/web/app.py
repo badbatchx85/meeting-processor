@@ -25,7 +25,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, load_config
 from ..dashboard import STAGES
-from . import spa_serving
+from . import meeting_export, spa_serving
 from .runtime import (
     VALID_PROVIDERS,
     get_supervisor,
@@ -971,6 +971,17 @@ def create_app(config: Settings | None = None) -> FastAPI:
             return _load_meeting(config.vault_path, meeting_id)
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Reunião não encontrada")
+
+    @app.get("/api/meetings/{meeting_id}/export.md")
+    async def api_export_md(meeting_id: str):
+        try:
+            meeting = _load_meeting(config.vault_path, meeting_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        body = meeting_export.to_markdown(meeting)
+        return _attachment_response(
+            body, f"{meeting_id}.md", "text/markdown; charset=utf-8"
+        )
 
     @app.get("/api/watcher")
     async def api_watcher():
