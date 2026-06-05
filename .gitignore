@@ -41,3 +41,4 @@ Thumbs.db
 meeting_processor/web/spa/
 .playwright-mcp/
 whisper-debug.log
+uploads/
