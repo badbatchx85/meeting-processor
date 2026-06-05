@@ -28,10 +28,25 @@ if [ ! -x "$PY" ]; then
   exit 1
 fi
 
-# --- 2. Compila a SPA se ainda não existir (e se houver Node) -----------------
-if [ ! -f "meeting_processor/web/spa/index.html" ]; then
+# --- 1b. Garante que as dependências estão instaladas ------------------------
+# Usa python-docx (exportação Word) como sentinela: se faltar, sincroniza tudo.
+if ! "$PY" -c "import docx" >/dev/null 2>&1; then
+  echo "Instalando/atualizando dependências…"
+  "$PY" -m pip install -q -r requirements.txt \
+    || { echo "Falha ao instalar dependências (veja requirements.txt)."; read -r -p "Enter para sair."; exit 1; }
+fi
+
+# --- 2. Compila a SPA na primeira vez ou quando o código mudou ---------------
+SPA_INDEX="meeting_processor/web/spa/index.html"
+needs_build=false
+if [ ! -f "$SPA_INDEX" ]; then
+  needs_build=true
+elif [ -n "$(find frontend/src frontend/index.html frontend/package.json -newer "$SPA_INDEX" 2>/dev/null)" ]; then
+  needs_build=true   # fonte mais nova que o build → recompila
+fi
+if [ "$needs_build" = true ]; then
   if command -v npm >/dev/null 2>&1; then
-    echo "Compilando a interface (só na primeira vez)…"
+    echo "Compilando a interface (primeira vez ou após atualização)…"
     ( cd frontend && { [ -d node_modules ] || npm install; } && npm run build ) \
       || echo "Falha ao compilar a SPA — usando a interface clássica (HTMX)."
   else
