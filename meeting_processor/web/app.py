@@ -983,6 +983,25 @@ def create_app(config: Settings | None = None) -> FastAPI:
             body, f"{meeting_id}.md", "text/markdown; charset=utf-8"
         )
 
+    @app.get("/api/meetings/{meeting_id}/export.docx")
+    async def api_export_docx(meeting_id: str):
+        try:
+            meeting = _load_meeting(config.vault_path, meeting_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        data = meeting_export.to_docx(meeting)
+        return Response(
+            content=data,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
+            headers={
+                "Content-Disposition": f'attachment; filename="{meeting_id}.docx"',
+                "Cache-Control": "no-store",
+            },
+        )
+
     @app.get("/api/watcher")
     async def api_watcher():
         return supervisor.info()

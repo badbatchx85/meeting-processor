@@ -77,3 +77,27 @@ def test_export_md_returns_summary_without_transcript_link(client, config):
 def test_export_md_missing_meeting_404(client):
     r = client.get("/api/meetings/nope/export.md")
     assert r.status_code == 404
+
+
+def test_export_docx_returns_valid_document(client, config):
+    import docx  # python-docx
+
+    mid = _write_meeting(config.vault_path)
+    r = client.get(f"/api/meetings/{mid}/export.docx")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert "attachment" in r.headers.get("content-disposition", "")
+    assert len(r.content) > 0
+
+    doc = docx.Document(io.BytesIO(r.content))
+    full_text = "\n".join(p.text for p in doc.paragraphs)
+    assert "Alinhar o roadmap" in full_text                 # purpose present
+    assert any(p.style.name.startswith("Heading") for p in doc.paragraphs)  # a heading
+    assert "Adiar o lançamento" in full_text                # decision bullet
+
+
+def test_export_docx_missing_meeting_404(client):
+    r = client.get("/api/meetings/nope/export.docx")
+    assert r.status_code == 404
