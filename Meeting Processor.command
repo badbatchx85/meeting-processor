@@ -12,10 +12,17 @@
 # Não precisa de terminal nem de comandos — é só o duplo clique.
 #
 # Na interface (SPA) você pode:
-#   - enviar/processar um vídeo e acompanhar o progresso por etapas no Dashboard;
+#   - enviar/processar um vídeo e acompanhar o progresso por etapas no Dashboard
+#     (com a opção "Apenas transcrição (sem resumo)" para pular o resumo);
 #   - ver todas as reuniões (inclusive as "só transcrição") e ler a transcrição;
-#   - gerar o resumo (propósito, tipo, decisões, tarefas) de uma reunião que só
-#     tem transcrição, pelo botão "Gerar resumo" — sem re-transcrever;
+#   - gerar a transcrição novamente, pelo botão "Gerar transcrição" — re-roda o
+#     Whisper sobre o arquivo de origem (na reunião e na lista de reuniões);
+#   - gerar o resumo (propósito, tipo, decisões, tarefas) pelo botão "Gerar resumo",
+#     mesmo que o resumo anterior tenha falhado — sem re-transcrever;
+#   - apagar o arquivo de origem (vídeo/áudio) para liberar espaço, mantendo a
+#     transcrição e o resumo no vault, pelo botão "Apagar arquivo de origem";
+#   - auditar cada geração no "Log de geração" da reunião: se rodou OK e, em caso
+#     de erro, o motivo (ex.: arquivo de origem não encontrado);
 #   - exportar o resumo em Markdown ou Word (.docx);
 #   - ver o histórico de conversões, com sucessos e falhas (e o motivo).
 #
@@ -69,6 +76,12 @@ fi
 SERVER_PID=""
 if curl -s -o /dev/null --max-time 2 "$URL" 2>/dev/null; then
   echo "Servidor já está rodando em $URL"
+  if [ "$needs_build" = true ]; then
+    echo "  AVISO: o código foi atualizado, mas há um servidor antigo rodando."
+    echo "         Ele pode estar servindo a versão anterior (rotas da API antigas)."
+    echo "         Feche a janela/servidor anterior e reabra este launcher para"
+    echo "         carregar a versão nova."
+  fi
 else
   echo "Iniciando o Meeting Processor…"
   "$PY" -m meeting_processor web --port "$PORT" &
