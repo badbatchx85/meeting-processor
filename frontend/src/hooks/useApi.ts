@@ -165,10 +165,11 @@ export function useSummarizeMeeting() {
   return useMutation({
     mutationFn: (id: string) =>
       api.post(`/api/meetings/${encodeURIComponent(id)}/summarize`),
-    onSuccess: () => {
+    onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["status"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });
       qc.invalidateQueries({ queryKey: ["history"] });
+      qc.invalidateQueries({ queryKey: ["meeting-log", id] });
     },
   });
 }

@@ -17,13 +17,19 @@ function setup() {
 
 describe("MeetingDetail", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
-      id: "abc", title: "abc",
-      meta: { purpose: "Alinhar o roadmap", meeting_type: "planejamento" },
-      resumo_md: "# Resumo aqui",
-      tasks: [{ done: false, description: "Tarefa 1" }],
-      transcricao_md: "linha de transcrição",
-    }), { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/source"))
+        return new Response(JSON.stringify({ exists: true, name: "x.mp4", path: "/x.mp4", size: 1 }), { status: 200 });
+      if (u.includes("/log")) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response(JSON.stringify({
+        id: "abc", title: "abc",
+        meta: { purpose: "Alinhar o roadmap", meeting_type: "planejamento" },
+        resumo_md: "# Resumo aqui",
+        tasks: [{ done: false, description: "Tarefa 1" }],
+        transcricao_md: "linha de transcrição",
+      }), { status: 200 });
+    }));
   });
 
   it("shows summary by default and switches to transcript tab", async () => {
