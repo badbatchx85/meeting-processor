@@ -111,10 +111,15 @@ def _list_meetings(vault_path: Path) -> list[dict[str, Any]]:
         if not entry.is_dir():
             continue
         resumos = list(entry.glob("Resumo - *.md"))
-        if not resumos:
+        transcricoes = list(entry.glob("Transcricao - *.md"))
+        # Inclui reuniões só-transcrição (resumo desligado ou que falhou);
+        # ignora pastas sem nenhum dos dois.
+        if not resumos and not transcricoes:
             continue
 
-        meta, _ = _strip_frontmatter(resumos[0].read_text(encoding="utf-8"))
+        meta: dict[str, str] = {}
+        if resumos:
+            meta, _ = _strip_frontmatter(resumos[0].read_text(encoding="utf-8"))
 
         tarefas_paths = list(entry.glob("Tarefas - *.md"))
         task_count = 0
@@ -132,9 +137,24 @@ def _list_meetings(vault_path: Path) -> list[dict[str, Any]]:
                 "source_file": meta.get("source_file", ""),
                 "meeting_type": meta.get("meeting_type", ""),
                 "purpose": meta.get("purpose", ""),
+                "has_summary": bool(resumos),
             }
         )
     return meetings
+
+
+def _history_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Forma uma entrada do histórico de processamento para a UI."""
+    details = entry.get("details") or {}
+    return {
+        "file": entry.get("file", ""),
+        "status": entry.get("status", ""),
+        "started": entry.get("started", ""),
+        "completed": entry.get("completed"),
+        "failed_stage": entry.get("failed_stage"),
+        "error": entry.get("error_message"),
+        "detail": details.get("result", ""),
+    }
 
 
 def _load_meeting(vault_path: Path, meeting_id: str) -> dict[str, Any]:
@@ -1014,6 +1034,11 @@ def create_app(config: Settings | None = None) -> FastAPI:
             "watcher_alive": status["watcher_alive"],
             "active": [_job_progress(j) for j in status["active_jobs"]],
         }
+
+    @app.get("/api/history")
+    async def api_history():
+        status = _read_status(config.vault_path, config.watch_dir)
+        return [_history_entry(e) for e in status["history"]]
 
     @app.post("/api/watcher/start")
     async def api_watcher_start():

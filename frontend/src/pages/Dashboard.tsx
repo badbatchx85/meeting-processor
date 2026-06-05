@@ -6,7 +6,8 @@ import { Card } from "../components/Card";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { useToast } from "../components/Toast";
-import { useHealth, useWatcher, useMeetings, useWatcherControl, useProcessFile, useUploadFile, useStatus } from "../hooks/useApi";
+import { useHealth, useWatcher, useMeetings, useWatcherControl, useProcessFile, useUploadFile, useStatus, useHistory } from "../hooks/useApi";
+import { ConversionHistory } from "../components/ConversionHistory";
 import { ApiError } from "../api/client";
 
 function formatBytes(n: number): string {
@@ -26,6 +27,7 @@ export function Dashboard() {
   const process = useProcessFile();
   const upload = useUploadFile();
   const status = useStatus();
+  const history = useHistory();
   const toast = useToast();
   const qc = useQueryClient();
   const [file, setFile] = useState("");
@@ -38,6 +40,7 @@ export function Dashboard() {
   useEffect(() => {
     if (prevActive.current > 0 && activeCount === 0) {
       qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["history"] });
     }
     prevActive.current = activeCount;
   }, [activeCount, qc]);
@@ -171,6 +174,12 @@ export function Dashboard() {
           ) : (
             <EmptyState title="Nenhuma reunião ainda" hint="Processe um arquivo para começar." />
           )}
+        </Card>
+      </div>
+
+      <div className="lg:col-span-2">
+        <Card title="Conversões recentes">
+          <ConversionHistory entries={history.data ?? []} limit={5} />
         </Card>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import type {
   Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse, Config,
+  HistoryEntry,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -34,6 +35,9 @@ export const useConfig = () =>
 
 export const useMeetings = () =>
   useQuery({ queryKey: ["meetings"], queryFn: () => api.get<MeetingSummary[]>("/api/meetings") });
+
+export const useHistory = () =>
+  useQuery({ queryKey: ["history"], queryFn: () => api.get<HistoryEntry[]>("/api/history") });
 
 export const useMeeting = (id: string) =>
   useQuery({

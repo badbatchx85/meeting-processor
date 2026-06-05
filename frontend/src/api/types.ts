@@ -11,7 +11,11 @@ export interface Llm {
 export interface MeetingSummary {
   id: string; title: string; created: string; duration: string;
   task_count: number; participants: string; source_file: string;
-  meeting_type: string; purpose: string;
+  meeting_type: string; purpose: string; has_summary: boolean;
+}
+export interface HistoryEntry {
+  file: string; status: string; started: string; completed: string | null;
+  failed_stage: string | null; error: string | null; detail: string;
 }
 export interface MeetingTask { done: boolean; description: string; }
 export interface MeetingDetail {

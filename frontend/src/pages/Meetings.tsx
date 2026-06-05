@@ -5,11 +5,13 @@ import { Card } from "../components/Card";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
-import { useMeetings, useDeleteMeeting } from "../hooks/useApi";
+import { useMeetings, useDeleteMeeting, useHistory } from "../hooks/useApi";
+import { ConversionHistory } from "../components/ConversionHistory";
 import { ApiError } from "../api/client";
 
 export function Meetings() {
   const meetings = useMeetings();
+  const history = useHistory();
   const del = useDeleteMeeting();
   const toast = useToast();
   const [q, setQ] = useState("");
@@ -27,6 +29,7 @@ export function Meetings() {
   };
 
   return (
+    <div className="flex flex-col gap-6">
     <Card title="Reuniões" actions={
       <div className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-2">
         <Search size={15} className="text-slate-400" />
@@ -48,6 +51,9 @@ export function Meetings() {
                     {m.meeting_type && (
                       <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">{m.meeting_type}</span>
                     )}
+                    {!m.has_summary && (
+                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">só transcrição</span>
+                    )}
                   </div>
                   {m.purpose && <p className="text-xs text-slate-400">{m.purpose}</p>}
                 </td>
@@ -66,5 +72,10 @@ export function Meetings() {
       )}
       <ConfirmDialog open={!!pending} title="Apagar esta reunião?" onConfirm={confirmDelete} onCancel={() => setPending(null)} />
     </Card>
+
+    <Card title="Histórico de conversões">
+      <ConversionHistory entries={history.data ?? []} />
+    </Card>
+    </div>
   );
 }
