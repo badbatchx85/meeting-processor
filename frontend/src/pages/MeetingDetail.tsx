@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import { Card } from "../components/Card";
 import { MarkdownView } from "../components/MarkdownView";
-import { useMeeting } from "../hooks/useApi";
+import { useToast } from "../components/Toast";
+import { useMeeting, useSummarizeMeeting } from "../hooks/useApi";
+import { ApiError } from "../api/client";
 
 type Tab = "summary" | "tasks" | "transcript";
 
 export function MeetingDetail() {
   const { id = "" } = useParams();
   const meeting = useMeeting(id);
+  const summarize = useSummarizeMeeting();
+  const toast = useToast();
   const [tab, setTab] = useState<Tab>("summary");
 
   const obsidianUri = `obsidian://open?path=${encodeURIComponent(id)}`;
@@ -22,6 +27,13 @@ export function MeetingDetail() {
   if (meeting.isError || !meeting.data) return <p className="text-rose-600">Reunião não encontrada.</p>;
   const d = meeting.data;
   const enc = encodeURIComponent(id);
+  const hasSummary = d.resumo_md.trim().length > 0;
+
+  const generateSummary = () =>
+    summarize.mutate(id, {
+      onSuccess: () => toast("ok", "Gerando resumo — acompanhe no Dashboard."),
+      onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
+    });
 
   return (
     <Card title={d.title} actions={
@@ -51,7 +63,19 @@ export function MeetingDetail() {
         ))}
       </div>
 
-      {tab === "summary" && <MarkdownView>{d.resumo_md}</MarkdownView>}
+      {tab === "summary" && (hasSummary ? (
+        <MarkdownView>{d.resumo_md}</MarkdownView>
+      ) : (
+        <div className="flex flex-col items-start gap-3 py-6">
+          <p className="text-sm text-slate-500">
+            Sem resumo ainda — esta reunião só tem a transcrição.
+          </p>
+          <button onClick={generateSummary} disabled={summarize.isPending}
+            className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
+            <Sparkles size={15} /> {summarize.isPending ? "Enviando…" : "Gerar resumo"}
+          </button>
+        </div>
+      ))}
       {tab === "transcript" && <MarkdownView>{d.transcricao_md}</MarkdownView>}
       {tab === "tasks" && (
         <ul className="space-y-1">

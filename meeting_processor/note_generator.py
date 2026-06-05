@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import Settings
-from .models import MeetingSummary, Transcript
-from .utils import format_duration, format_timestamp, yaml_quote
+from .models import MeetingSummary, Transcript, TranscriptSegment
+from .utils import format_duration, format_timestamp, parse_timestamp, yaml_quote
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +47,19 @@ class NoteGenerator:
 
         meeting_dir = self.config.reunioes_path / folder_name
         meeting_dir.mkdir(parents=True, exist_ok=True)
+        return self._paths_from_folder(meeting_dir)
 
+    def paths_for_existing(self, meeting_dir: Path) -> MeetingPaths:
+        """Resolve os caminhos de uma reunião já existente (sem criar pasta)."""
+        return self._paths_from_folder(meeting_dir)
+
+    @staticmethod
+    def _paths_from_folder(meeting_dir: Path) -> MeetingPaths:
+        """Monta os nomes/caminhos a partir do nome da pasta da reunião."""
+        folder_name = meeting_dir.name
         resumo_name = f"Resumo - {folder_name}"
         tarefas_name = f"Tarefas - {folder_name}"
         transcricao_name = f"Transcricao - {folder_name}"
-
         return MeetingPaths(
             meeting_dir=meeting_dir,
             folder_name=folder_name,
@@ -67,6 +75,35 @@ class NoteGenerator:
         """Salva a transcrição bruta (sempre, independe do resumo)."""
         self._write_raw_transcription(transcript, paths.raw_path)
         logger.info("Transcricao bruta salva: %s", paths.raw_path)
+
+    def read_transcription(self, path: Path) -> Transcript:
+        """Reconstrói um ``Transcript`` a partir de ``Transcricao - *.md``.
+
+        Inverso de :meth:`_write_raw_transcription`: cada linha
+        ``**[MM:SS]** texto`` vira um segmento (o fim de um segmento é o início
+        do próximo, ou o seu próprio início no último).
+        """
+        line_re = re.compile(r"^\*\*\[(.+?)\]\*\*\s*(.*?)\s*$")
+        starts: list[float] = []
+        texts: list[str] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = line_re.match(line.strip())
+            if m and m.group(2):
+                starts.append(parse_timestamp(m.group(1)))
+                texts.append(m.group(2))
+
+        segments: list[TranscriptSegment] = []
+        for i, (start, text) in enumerate(zip(starts, texts)):
+            end = starts[i + 1] if i + 1 < len(starts) else start
+            segments.append(TranscriptSegment(start=start, end=end, text=text))
+
+        duration = segments[-1].end if segments else 0.0
+        return Transcript(
+            segments=segments,
+            full_text=" ".join(texts),
+            language=self.config.whisper_language,
+            duration=duration,
+        )
 
     def write_summary_note(
         self,

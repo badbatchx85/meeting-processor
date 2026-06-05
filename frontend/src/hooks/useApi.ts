@@ -112,6 +112,19 @@ export function useDeleteMeeting() {
   });
 }
 
+export function useSummarizeMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/api/meetings/${encodeURIComponent(id)}/summarize`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["status"] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["history"] });
+    },
+  });
+}
+
 export function useMoveTask() {
   const qc = useQueryClient();
   return useMutation({

@@ -1023,6 +1023,23 @@ def create_app(config: Settings | None = None) -> FastAPI:
             },
         )
 
+    @app.post("/api/meetings/{meeting_id}/summarize")
+    async def api_summarize(meeting_id: str):
+        meeting_dir = config.vault_path / "wiki" / "reunioes" / meeting_id
+        if not meeting_dir.is_dir() or not list(meeting_dir.glob("Transcricao - *.md")):
+            raise HTTPException(status_code=404, detail="Transcrição não encontrada")
+
+        def _run():
+            try:
+                from ..pipeline import MeetingPipeline
+
+                MeetingPipeline(config).summarize_existing(meeting_id)
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha ao gerar resumo via API")
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "queued": True, "meeting_id": meeting_id}
+
     @app.get("/api/watcher")
     async def api_watcher():
         return supervisor.info()

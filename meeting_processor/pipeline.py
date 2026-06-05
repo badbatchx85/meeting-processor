@@ -83,78 +83,13 @@ class MeetingPipeline:
             paths = self.note_generator.prepare(video_path.name, created_at)
             self.note_generator.write_transcription(transcript, paths)
 
-            title = f"Reuniao {created_at.strftime('%Y-%m-%d %Hh%M')}"
-            date_str = created_at.strftime("%Y-%m-%d")
-            summary: MeetingSummary | None = None
-            note_path = ""
-
-            # Etapa 3: Resumir (opcional)
-            if steps["summary"]:
-                provider_label, model_label = self._llm_labels()
-                logger.info("[3] Gerando resumo com %s...", provider_label)
-                job.advance("summary", f"{provider_label}: {model_label}")
-                job.set_progress("summary", 10, f"Enviando ao {provider_label}...")
-                self.dashboard.update(job)
-                if self.summarizer is None:
-                    self.summarizer = MeetingSummarizer(self.config)
-                summary = self.summarizer.summarize(transcript, video_path.name)
-                job.set_progress("summary", 100, f"{len(summary.action_items)} tarefas, {len(summary.participants)} participantes")
-                self.dashboard.update(job)
-
-                # Etapa 4: Gerar nota de resumo (opcional)
-                if steps["note"]:
-                    logger.info("[4] Gerando nota de reuniao no Obsidian...")
-                    job.advance("note", "Gerando markdown")
-                    job.set_progress("note", 30)
-                    self.dashboard.update(job)
-                    self.note_generator.write_summary_note(
-                        transcript, summary, video_path.name, created_at, paths
-                    )
-                    note_path = str(paths.note_path)
-                    job.set_progress("note", 100, f"{paths.meeting_dir.name}/")
-                    self.dashboard.update(job)
-
-                # Etapa 5: Criar Kanban da reunião (opcional)
-                if steps["kanban"]:
-                    logger.info("[5] Criando quadro Kanban da reuniao...")
-                    job.advance("kanban", f"{len(summary.action_items)} tarefas")
-                    job.set_progress("kanban", 30)
-                    self.dashboard.update(job)
-                    try:
-                        self.kanban.create_board(
-                            meeting_dir=paths.meeting_dir,
-                            tasks=summary.action_items,
-                            meeting_title=title,
-                        )
-                        job.set_progress("kanban", 100, f"{len(summary.action_items)} tarefas criadas")
-                    except Exception as e:
-                        logger.warning("Falha ao criar Kanban (nao critico): %s", e)
-                        job.set_progress("kanban", 100, f"Falha: {e}")
-                    self.dashboard.update(job)
-
-                # Etapa 6: Integrar com wiki (opcional)
-                if steps["wiki"]:
-                    logger.info("[6] Integrando com wiki claude-obsidian...")
-                    duration = format_duration(transcript.duration)
-                    job.advance("wiki", "Atualizando index, log e hot cache")
-                    job.set_progress("wiki", 20)
-                    self.dashboard.update(job)
-                    try:
-                        self.wiki.register_meeting(
-                            title=title,
-                            date_str=date_str,
-                            source_file=video_path.name,
-                            duration=duration,
-                            task_count=len(summary.action_items),
-                            key_topics=summary.key_topics,
-                        )
-                        job.set_progress("wiki", 100, "index, log e hot cache atualizados")
-                    except Exception as e:
-                        logger.warning("Falha ao integrar com wiki (nao critico): %s", e)
-                        job.set_progress("wiki", 100, f"Falha: {e}")
-
-            # Nó central do grafo (liga só ao que foi gerado)
-            self.note_generator.write_group_note(paths, has_summary=steps["note"])
+            # Etapas 3-6: resumo/nota/kanban/wiki (opcionais) — caminho único.
+            summary = self._summarize(
+                transcript, paths, video_path.name, created_at, job, steps
+            )
+            note_path = (
+                str(paths.note_path) if summary is not None and steps["note"] else ""
+            )
 
             elapsed = time.time() - start_time
             if summary is not None:
@@ -198,6 +133,119 @@ class MeetingPipeline:
             if self.config.cleanup_temp and audio_path.exists():
                 audio_path.unlink()
                 logger.debug("Arquivo temporario removido: %s", audio_path)
+
+    def _summarize(self, transcript, paths, source_file, created_at, job, steps):
+        """Etapas 3-6 (resumo/nota/kanban/wiki) sobre um transcript + pasta.
+
+        Caminho único usado pelo processamento normal e pelo re-resumo de uma
+        reunião já transcrita. Retorna o ``MeetingSummary`` ou ``None`` quando o
+        resumo está desligado.
+        """
+        title = f"Reuniao {created_at.strftime('%Y-%m-%d %Hh%M')}"
+        date_str = created_at.strftime("%Y-%m-%d")
+        summary: MeetingSummary | None = None
+
+        # Etapa 3: Resumir (opcional)
+        if steps["summary"]:
+            provider_label, model_label = self._llm_labels()
+            logger.info("[3] Gerando resumo com %s...", provider_label)
+            job.advance("summary", f"{provider_label}: {model_label}")
+            job.set_progress("summary", 10, f"Enviando ao {provider_label}...")
+            self.dashboard.update(job)
+            if self.summarizer is None:
+                self.summarizer = MeetingSummarizer(self.config)
+            summary = self.summarizer.summarize(transcript, source_file)
+            job.set_progress("summary", 100, f"{len(summary.action_items)} tarefas, {len(summary.participants)} participantes")
+            self.dashboard.update(job)
+
+            # Etapa 4: Gerar nota de resumo (opcional)
+            if steps["note"]:
+                logger.info("[4] Gerando nota de reuniao no Obsidian...")
+                job.advance("note", "Gerando markdown")
+                job.set_progress("note", 30)
+                self.dashboard.update(job)
+                self.note_generator.write_summary_note(
+                    transcript, summary, source_file, created_at, paths
+                )
+                job.set_progress("note", 100, f"{paths.meeting_dir.name}/")
+                self.dashboard.update(job)
+
+            # Etapa 5: Criar Kanban da reunião (opcional)
+            if steps["kanban"]:
+                logger.info("[5] Criando quadro Kanban da reuniao...")
+                job.advance("kanban", f"{len(summary.action_items)} tarefas")
+                job.set_progress("kanban", 30)
+                self.dashboard.update(job)
+                try:
+                    self.kanban.create_board(
+                        meeting_dir=paths.meeting_dir,
+                        tasks=summary.action_items,
+                        meeting_title=title,
+                    )
+                    job.set_progress("kanban", 100, f"{len(summary.action_items)} tarefas criadas")
+                except Exception as e:
+                    logger.warning("Falha ao criar Kanban (nao critico): %s", e)
+                    job.set_progress("kanban", 100, f"Falha: {e}")
+                self.dashboard.update(job)
+
+            # Etapa 6: Integrar com wiki (opcional)
+            if steps["wiki"]:
+                logger.info("[6] Integrando com wiki claude-obsidian...")
+                duration = format_duration(transcript.duration)
+                job.advance("wiki", "Atualizando index, log e hot cache")
+                job.set_progress("wiki", 20)
+                self.dashboard.update(job)
+                try:
+                    self.wiki.register_meeting(
+                        title=title,
+                        date_str=date_str,
+                        source_file=source_file,
+                        duration=duration,
+                        task_count=len(summary.action_items),
+                        key_topics=summary.key_topics,
+                    )
+                    job.set_progress("wiki", 100, "index, log e hot cache atualizados")
+                except Exception as e:
+                    logger.warning("Falha ao integrar com wiki (nao critico): %s", e)
+                    job.set_progress("wiki", 100, f"Falha: {e}")
+
+        # Nó central do grafo (liga só ao que foi gerado)
+        self.note_generator.write_group_note(paths, has_summary=steps["note"])
+        return summary
+
+    def summarize_existing(self, meeting_id: str) -> None:
+        """Gera o resumo de uma reunião já transcrita (sem re-transcrever)."""
+        meeting_dir = self.config.reunioes_path / meeting_id
+        transcricoes = list(meeting_dir.glob("Transcricao - *.md"))
+        if not meeting_dir.is_dir() or not transcricoes:
+            raise FileNotFoundError(
+                f"Transcrição não encontrada para a reunião: {meeting_id}"
+            )
+
+        logger.info("Gerando resumo da reuniao existente: %s", meeting_id)
+        transcript = self.note_generator.read_transcription(transcricoes[0])
+        paths = self.note_generator.paths_for_existing(meeting_dir)
+        created_at = datetime.now()
+
+        # Áudio e transcrição já estão prontos: começa em "summary".
+        steps = {
+            "summary": True,
+            "note": True,
+            "kanban": self.config.enable_kanban,
+            "wiki": self.config.enable_wiki,
+        }
+        job = self.dashboard.new_job(meeting_id)
+        for key in ("audio", "transcription"):
+            job.advance(key)
+            job.set_progress(key, 100)
+        try:
+            self._summarize(transcript, paths, meeting_id, created_at, job, steps)
+            job.complete("resumo gerado a partir da transcrição")
+            self.dashboard.update(job)
+        except Exception as e:
+            job.fail(str(e))
+            self.dashboard.update(job)
+            raise
 
     def _llm_labels(self) -> tuple[str, str]:
         """Retorna (label do provedor, label do modelo) para logs/dashboard."""
