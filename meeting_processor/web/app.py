@@ -159,6 +159,33 @@ def _history_entry(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# Modelos locais sugeridos (Ollama) — afinados para Apple M5 / 16 GB.
+_LOCAL_SUGGESTED = ["qwen2.5:7b", "qwen2.5:14b", "llama3.1:8b", "gemma2:9b"]
+
+
+def _ollama_installed(base_url: str) -> list[str] | None:
+    """Modelos instalados no Ollama, ou ``None`` se o Ollama não respondeu."""
+    import httpx
+
+    try:
+        r = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=2.0)
+        r.raise_for_status()
+        return [m.get("name", "") for m in r.json().get("models", []) if m.get("name")]
+    except Exception:  # noqa: BLE001 — Ollama desligado/inacessível
+        return None
+
+
+def _ollama_pull(base_url: str, model: str) -> None:
+    """Baixa um modelo via API do Ollama (stream drenado até concluir)."""
+    import httpx
+
+    with httpx.stream(
+        "POST", f"{base_url.rstrip('/')}/api/pull", json={"model": model}, timeout=None
+    ) as r:
+        for _ in r.iter_lines():
+            pass
+
+
 def _reunioes_dir(vault_path: Path, meeting_id: str) -> Path | None:
     """Resolve ``meeting_id`` para um filho DIRETO de ``wiki/reunioes/``.
 
@@ -1157,6 +1184,35 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if supervisor.is_running():
             supervisor.restart()
         return {"ok": True, "llm": _llm_info()}
+
+    @app.get("/api/llm/local-models")
+    async def api_local_models():
+        installed = _ollama_installed(config.ollama_base_url)
+        running = installed is not None
+        inst = installed or []
+        return {
+            "ollama_running": running,
+            "installed": inst,
+            "suggested": [m for m in _LOCAL_SUGGESTED if m not in inst],
+        }
+
+    @app.post("/api/llm/local-models/pull")
+    async def api_pull_model(payload: dict):
+        model = (payload or {}).get("model", "").strip()
+        if not model:
+            return JSONResponse(
+                {"ok": False, "error": "Modelo vazio"}, status_code=400
+            )
+
+        def _run():
+            try:
+                _ollama_pull(config.ollama_base_url, model)
+                logger.info("Download do modelo local concluído: %s", model)
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha ao baixar modelo local %s", model)
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "queued": True, "model": model}
 
     @app.get("/api/config")
     async def api_get_config():

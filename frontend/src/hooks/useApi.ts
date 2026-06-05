@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import type {
   Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse, Config,
-  HistoryEntry,
+  HistoryEntry, LocalModels,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -64,6 +64,21 @@ export function useSetProvider() {
   return useMutation({
     mutationFn: (provider: string) => api.post("/api/llm/provider", { provider }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["llm"] }),
+  });
+}
+
+export const useLocalModels = (enabled: boolean) =>
+  useQuery({
+    queryKey: ["local-models"],
+    queryFn: () => api.get<LocalModels>("/api/llm/local-models"),
+    enabled,
+  });
+
+export function usePullModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (model: string) => api.post("/api/llm/local-models/pull", { model }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["local-models"] }),
   });
 }
 

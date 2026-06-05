@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { useToast } from "../components/Toast";
-import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import type { Llm, Steps } from "../api/types";
 
@@ -66,6 +66,9 @@ export function Settings() {
   }, [config.data]);
 
   const provider = llm.data?.provider ?? "";
+  const isLocal = provider === "local";
+  const localModels = useLocalModels(isLocal);
+  const pull = usePullModel();
   // Seed the model from the active provider's current value.
   useEffect(() => {
     setModelValue(currentModel(llm.data, provider));
@@ -74,15 +77,23 @@ export function Settings() {
 
   const onError = (e: unknown) => toast("err", e instanceof ApiError ? e.message : "Erro");
 
-  const modelOptions = provider in MODEL_OPTIONS
-    ? Array.from(new Set([...MODEL_OPTIONS[provider], model].filter(Boolean)))
-    : [];
+  const modelOptions = isLocal
+    ? Array.from(new Set([...(localModels.data?.installed ?? []), model].filter(Boolean)))
+    : provider in MODEL_OPTIONS
+      ? Array.from(new Set([...MODEL_OPTIONS[provider], model].filter(Boolean)))
+      : [];
 
   const saveModel = () =>
     setModel.mutate(
       { provider, model: model.trim() },
       { onSuccess: () => toast("ok", "Modelo atualizado."), onError },
     );
+
+  const doPull = (m: string) =>
+    pull.mutate(m, {
+      onSuccess: () => toast("ok", `Baixando ${m}… clique Atualizar quando terminar.`),
+      onError,
+    });
 
   const saveKey = () =>
     setKey.mutate(
@@ -129,7 +140,64 @@ export function Settings() {
             </label>
           )}
 
-          {provider in MODEL_OPTIONS && (
+          {isLocal && (
+            <div className="flex flex-col gap-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Modelo local (Ollama)</span>
+                <button onClick={() => localModels.refetch()}
+                  className="text-xs text-brand hover:underline">Atualizar</button>
+              </div>
+              {localModels.isLoading ? (
+                <p className="text-slate-400">Consultando o Ollama…</p>
+              ) : !localModels.data?.ollama_running ? (
+                <p className="text-amber-700">
+                  Ollama não está rodando. Inicie com <code>ollama serve</code> ou instale em{" "}
+                  <a className="text-brand hover:underline" href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>.
+                </p>
+              ) : localModels.data.installed.length > 0 ? (
+                <>
+                  <div className="flex gap-2">
+                    <select aria-label="Modelo" value={custom ? CUSTOM : model}
+                      onChange={(e) => {
+                        if (e.target.value === CUSTOM) { setCustom(true); setModelValue(""); }
+                        else { setCustom(false); setModelValue(e.target.value); }
+                      }}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                      {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                      <option value={CUSTOM}>Outro (personalizado)…</option>
+                    </select>
+                    <button onClick={saveModel} disabled={setModel.isPending || !model.trim()}
+                      className="rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
+                      Salvar modelo
+                    </button>
+                  </div>
+                  {custom && (
+                    <input value={model} onChange={(e) => setModelValue(e.target.value)}
+                      placeholder="ex.: qwen2.5:7b"
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-slate-500">Nenhum modelo instalado. Baixe um recomendado:</p>
+                  {localModels.data.suggested.map((m) => (
+                    <div key={m} className="flex items-center justify-between gap-2">
+                      <code className="text-xs text-slate-600">{m}</code>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400">ollama pull {m}</span>
+                        <button aria-label={`Baixar ${m}`} onClick={() => doPull(m)} disabled={pull.isPending}
+                          className="rounded-lg bg-brand px-2.5 py-1 text-xs text-white hover:bg-brand-dark disabled:opacity-50">
+                          Baixar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isLocal && provider in MODEL_OPTIONS && (
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-slate-600">Modelo</span>
               <div className="flex gap-2">

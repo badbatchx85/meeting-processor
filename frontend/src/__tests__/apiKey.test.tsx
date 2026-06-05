@@ -64,10 +64,4 @@ describe("Settings — API key entry", () => {
     });
   });
 
-  it("lists qwen2.5:7b in the local model dropdown", async () => {
-    vi.stubGlobal("fetch", stubFetch("local"));
-    setup();
-    await screen.findByLabelText("Modelo");
-    expect(screen.getByRole("option", { name: "qwen2.5:7b" })).toBeInTheDocument();
-  });
 });
