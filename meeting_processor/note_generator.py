@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .config import Settings
 from .models import MeetingSummary, Transcript
-from .utils import format_duration, format_timestamp
+from .utils import format_duration, format_timestamp, yaml_quote
 
 logger = logging.getLogger(__name__)
 
@@ -137,12 +137,17 @@ class NoteGenerator:
         duration = format_duration(transcript.duration)
         participants_yaml = self._format_yaml_list(summary.participants)
         tags_yaml = self._format_yaml_list(self.config.default_tags)
+        # Double-quoted scalars are escaped so embedded quotes stay valid YAML.
+        title_q = yaml_quote(title)
+        source_file_q = yaml_quote(source_file)
+        meeting_type_q = yaml_quote(summary.meeting_type)
+        purpose_q = yaml_quote(summary.purpose)
 
         frontmatter = f"""\
 ---
 type: source
 source_type: meeting-transcription
-title: "{title}"
+title: {title_q}
 created: {date_str}
 updated: {date_str}
 tags: {tags_yaml}
@@ -151,10 +156,10 @@ related: []
 sources:
   - "[[{transcricao_link}|Transcricao]]"
 participants: {participants_yaml}
-source_file: "{source_file}"
+source_file: {source_file_q}
 duration: "{duration}"
-meeting_type: "{summary.meeting_type}"
-purpose: "{summary.purpose}"
+meeting_type: {meeting_type_q}
+purpose: {purpose_q}
 ---"""
 
         body_parts = [

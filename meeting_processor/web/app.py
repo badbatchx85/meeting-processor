@@ -25,6 +25,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, load_config
 from ..dashboard import STAGES
+from ..utils import yaml_unquote
 from . import meeting_export, spa_serving
 from .runtime import (
     VALID_PROVIDERS,
@@ -82,7 +83,7 @@ def _strip_frontmatter(text: str) -> tuple[dict[str, str], str]:
     for line in fm_block.splitlines():
         if ":" in line and not line.startswith(" "):
             key, _, value = line.partition(":")
-            meta[key.strip()] = value.strip().strip('"')
+            meta[key.strip()] = yaml_unquote(value)
     return meta, body
 
 
