@@ -40,3 +40,4 @@ Thumbs.db
 # SPA build output (run `cd frontend && npm run build`)
 meeting_processor/web/spa/
 .playwright-mcp/
+whisper-debug.log

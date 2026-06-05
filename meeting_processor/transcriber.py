@@ -2,8 +2,10 @@
 
 import json
 import logging
+import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from .config import Settings
@@ -11,6 +13,49 @@ from .models import Transcript, TranscriptSegment
 from .utils import parse_timestamp
 
 logger = logging.getLogger(__name__)
+
+
+def _debug_logger(config: Settings) -> logging.Logger:
+    """Logger dedicado que grava ``whisper-debug.log`` na raiz do projeto.
+
+    Sempre em DEBUG, com handler próprio e ``propagate=False`` para não duplicar
+    no log principal nem no console. Idempotente: mantém um único FileHandler
+    apontando para o arquivo atual (re-aponta se ``project_root`` mudar).
+    """
+    path = str(Path(config.project_root) / "whisper-debug.log")
+    abspath = os.path.abspath(path)
+    log = logging.getLogger("meeting_processor.whisper_debug")
+    log.setLevel(logging.DEBUG)
+    log.propagate = False
+
+    already = any(
+        isinstance(h, logging.FileHandler)
+        and os.path.abspath(h.baseFilename) == abspath
+        for h in log.handlers
+    )
+    if not already:
+        for h in list(log.handlers):
+            log.removeHandler(h)
+            h.close()
+        handler = logging.FileHandler(path, encoding="utf-8")
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S"
+            )
+        )
+        log.addHandler(handler)
+    return log
+
+
+def _log_run_failure(
+    config: Settings, backend: str, context: dict, exc: BaseException
+) -> None:
+    """Registra a falha do Whisper com traceback completo nos dois logs."""
+    _debug_logger(config).error(
+        "FALHA backend=%s contexto=%s", backend, context, exc_info=exc
+    )
+    logger.error("Whisper falhou (backend=%s): %s", backend, exc, exc_info=exc)
+
 
 # Nomes do executável do whisper.cpp procurados no PATH do sistema.
 # Apenas nomes específicos — "main" (binário legado) é genérico demais e
@@ -108,15 +153,48 @@ class WhisperTranscriber:
             self.config.whisper_model,
         )
 
-        model = whisper.load_model(self.config.whisper_model)
-        if progress_callback:
-            progress_callback(15, "Transcrevendo áudio...")
-
-        result = model.transcribe(
-            str(audio_path),
-            language=self.config.whisper_language,
-            initial_prompt=self.config.whisper_initial_prompt or None,
+        dbg = _debug_logger(self.config)
+        size_mb = audio_path.stat().st_size / 1e6 if audio_path.exists() else 0.0
+        ctx = {
+            "model": self.config.whisper_model,
+            "language": self.config.whisper_language,
+            "audio": str(audio_path),
+            "audio_mb": round(size_mb, 1),
+        }
+        dbg.debug(
+            "Início openai-whisper: model=%s lang=%s audio=%s (%.1f MB) initial_prompt=%s",
+            self.config.whisper_model,
+            self.config.whisper_language,
+            audio_path.name,
+            size_mb,
+            bool(self.config.whisper_initial_prompt),
         )
+        dbg.debug(
+            "Se o modelo não estiver em cache (~/.cache/whisper), será baixado "
+            "agora — pode demorar (carga lenta = download)."
+        )
+
+        try:
+            t0 = time.monotonic()
+            model = whisper.load_model(self.config.whisper_model)
+            dbg.debug(
+                "Modelo carregado em %.1fs (device=%s)",
+                time.monotonic() - t0,
+                getattr(model, "device", "?"),
+            )
+            if progress_callback:
+                progress_callback(15, "Transcrevendo áudio...")
+
+            t1 = time.monotonic()
+            result = model.transcribe(
+                str(audio_path),
+                language=self.config.whisper_language,
+                initial_prompt=self.config.whisper_initial_prompt or None,
+            )
+            dbg.debug("model.transcribe concluído em %.1fs", time.monotonic() - t1)
+        except Exception as e:  # noqa: BLE001 — registra contexto e repropaga
+            _log_run_failure(self.config, "openai", ctx, e)
+            raise
 
         segments = []
         for seg in result.get("segments", []):
@@ -183,7 +261,12 @@ class WhisperTranscriber:
         if progress_callback:
             progress_callback(10, "Transcrevendo áudio...")
 
+        dbg = _debug_logger(self.config)
+        ctx = {"cmd": " ".join(cmd), "model": str(model), "audio": str(audio_path)}
+        dbg.debug("Início whisper.cpp: cmd=%s", " ".join(cmd))
+
         try:
+            t0 = time.monotonic()
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -192,9 +275,17 @@ class WhisperTranscriber:
                 encoding="utf-8",
                 errors="replace",
             )
+            dbg.debug(
+                "whisper.cpp ok em %.1fs (rc=%d) stderr=%s",
+                time.monotonic() - t0,
+                result.returncode,
+                result.stderr,
+            )
         except subprocess.CalledProcessError as e:
-            logger.error("Erro no whisper-cli: %s", e.stderr[:500])
-            raise RuntimeError(f"whisper-cli falhou: {e.stderr[:200]}") from e
+            ctx["returncode"] = e.returncode
+            ctx["stderr"] = e.stderr  # completo, sem truncar, no whisper-debug.log
+            _log_run_failure(self.config, "cpp", ctx, e)
+            raise RuntimeError(f"whisper-cli falhou: {(e.stderr or '')[:200]}") from e
 
         # Parse JSON output
         try:
@@ -206,7 +297,9 @@ class WhisperTranscriber:
                 data = json.loads(json_path.read_text(encoding="utf-8"))
                 json_path.unlink()
             else:
-                raise RuntimeError("whisper-cli nao gerou saida JSON valida")
+                err = RuntimeError("whisper-cli nao gerou saida JSON valida")
+                _log_run_failure(self.config, "cpp", ctx, err)
+                raise err
 
         # Extrair segmentos
         segments = []
