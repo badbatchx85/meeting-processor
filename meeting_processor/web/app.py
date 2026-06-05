@@ -175,15 +175,46 @@ def _ollama_installed(base_url: str) -> list[str] | None:
         return None
 
 
+# Progresso do download de modelo local (um por vez; estado por processo).
+_PULL_LOCK = threading.Lock()
+_PULL_STATE: dict[str, Any] = {}
+
+
+def _set_pull(**kw: Any) -> None:
+    with _PULL_LOCK:
+        _PULL_STATE.update(kw)
+
+
 def _ollama_pull(base_url: str, model: str) -> None:
-    """Baixa um modelo via API do Ollama (stream drenado até concluir)."""
+    """Baixa um modelo via API do Ollama, registrando o progresso (%)."""
     import httpx
 
-    with httpx.stream(
-        "POST", f"{base_url.rstrip('/')}/api/pull", json={"model": model}, timeout=None
-    ) as r:
-        for _ in r.iter_lines():
-            pass
+    _set_pull(model=model, percent=0, status="iniciando", done=False, error=None)
+    try:
+        with httpx.stream(
+            "POST", f"{base_url.rstrip('/')}/api/pull", json={"model": model}, timeout=None
+        ) as r:
+            for line in r.iter_lines():
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if data.get("error"):
+                    _set_pull(model=model, status="falha", error=data["error"], done=False)
+                    continue
+                total, completed = data.get("total"), data.get("completed")
+                pct = (
+                    int(completed / total * 100)
+                    if total and completed is not None
+                    else _PULL_STATE.get("percent", 0)
+                )
+                _set_pull(model=model, percent=pct, status=data.get("status", ""), done=False)
+        _set_pull(model=model, percent=100, status="concluído", done=True)
+    except Exception as e:  # noqa: BLE001
+        _set_pull(model=model, status="falha", error=str(e), done=True)
+        raise
 
 
 def _reunioes_dir(vault_path: Path, meeting_id: str) -> Path | None:
@@ -1213,6 +1244,11 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True, "queued": True, "model": model}
+
+    @app.get("/api/llm/local-models/pull/status")
+    async def api_pull_status():
+        with _PULL_LOCK:
+            return dict(_PULL_STATE)
 
     @app.get("/api/config")
     async def api_get_config():

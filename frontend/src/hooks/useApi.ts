@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import type {
   Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse, Config,
-  HistoryEntry, LocalModels,
+  HistoryEntry, LocalModels, PullStatus,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -72,6 +72,14 @@ export const useLocalModels = (enabled: boolean) =>
     queryKey: ["local-models"],
     queryFn: () => api.get<LocalModels>("/api/llm/local-models"),
     enabled,
+  });
+
+export const usePullStatus = (enabled: boolean) =>
+  useQuery({
+    queryKey: ["pull-status"],
+    queryFn: () => api.get<PullStatus>("/api/llm/local-models/pull/status"),
+    enabled,
+    refetchInterval: 1000,
   });
 
 export function usePullModel() {

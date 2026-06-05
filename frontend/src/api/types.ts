@@ -43,3 +43,4 @@ export interface JobProgress {
 export interface StatusResponse { watcher_alive: boolean; active: JobProgress[]; }
 export interface Config { watch_dir: string; steps: Steps; }
 export interface LocalModels { ollama_running: boolean; installed: string[]; suggested: string[]; }
+export interface PullStatus { model?: string; percent?: number; status?: string; done?: boolean; error?: string | null; }

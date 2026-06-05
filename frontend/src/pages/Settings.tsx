@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { useToast } from "../components/Toast";
-import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import type { Llm, Steps } from "../api/types";
 
@@ -69,6 +69,12 @@ export function Settings() {
   const isLocal = provider === "local";
   const localModels = useLocalModels(isLocal);
   const pull = usePullModel();
+  const pullStatus = usePullStatus(isLocal);
+  // Quando o download termina, atualiza a lista de instalados.
+  const pullDone = pullStatus.data?.done;
+  useEffect(() => {
+    if (pullDone) localModels.refetch();
+  }, [pullDone]); // eslint-disable-line react-hooks/exhaustive-deps
   // Seed the model from the active provider's current value.
   useEffect(() => {
     setModelValue(currentModel(llm.data, provider));
@@ -179,6 +185,18 @@ export function Settings() {
                 </>
               ) : (
                 <div className="flex flex-col gap-2">
+                  {pullStatus.data?.model && !pullStatus.data.done && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-slate-600">
+                        Baixando {pullStatus.data.model} — {pullStatus.data.percent ?? 0}%
+                        {pullStatus.data.status ? ` (${pullStatus.data.status})` : ""}
+                      </span>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                        <div className="h-full bg-brand transition-all"
+                          style={{ width: `${pullStatus.data.percent ?? 0}%` }} />
+                      </div>
+                    </div>
+                  )}
                   <p className="text-slate-500">Nenhum modelo instalado. Baixe um recomendado:</p>
                   {localModels.data.suggested.map((m) => (
                     <div key={m} className="flex items-center justify-between gap-2">

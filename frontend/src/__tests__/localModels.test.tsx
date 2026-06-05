@@ -18,9 +18,13 @@ function setup() {
   );
 }
 
-function stub(local: { ollama_running: boolean; installed: string[]; suggested: string[] }) {
+function stub(
+  local: { ollama_running: boolean; installed: string[]; suggested: string[] },
+  pullStatus: Record<string, unknown> = {},
+) {
   return vi.fn(async (url: string, opts?: RequestInit) => {
     if (opts?.method === "POST") return new Response(JSON.stringify({ ok: true, queued: true, model: "x" }), { status: 200 });
+    if (url.includes("/api/llm/local-models/pull/status")) return new Response(JSON.stringify(pullStatus), { status: 200 });
     if (url.includes("/api/llm/local-models")) return new Response(JSON.stringify(local), { status: 200 });
     if (url.includes("/api/config")) return new Response(JSON.stringify({ watch_dir: "", steps: { summary: true, note: true, kanban: true, wiki: true } }), { status: 200 });
     return new Response(JSON.stringify({
@@ -53,6 +57,15 @@ describe("Settings — local Ollama models", () => {
       expect(call).toBeTruthy();
       expect(JSON.parse(String(call![1]!.body))).toEqual({ model: "qwen2.5:7b" });
     });
+  });
+
+  it("shows a % bar while a local model is downloading", async () => {
+    vi.stubGlobal("fetch", stub(
+      { ollama_running: true, installed: [], suggested: ["qwen2.5:7b"] },
+      { model: "qwen2.5:7b", percent: 42, status: "downloading", done: false },
+    ));
+    setup();
+    expect(await screen.findByText(/42%/)).toBeInTheDocument();
   });
 
   it("shows a notice when Ollama is not running", async () => {
