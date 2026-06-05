@@ -1080,7 +1080,16 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
     @app.get("/api/meetings")
     async def api_meetings():
-        return _list_meetings(config.vault_path)
+        from ..pipeline import locate_source_file
+
+        meetings = _list_meetings(config.vault_path)
+        for m in meetings:
+            meeting_dir = _reunioes_dir(config.vault_path, m["id"])
+            m["source_exists"] = (
+                meeting_dir is not None
+                and locate_source_file(config, meeting_dir) is not None
+            )
+        return meetings
 
     @app.get("/api/meetings/{meeting_id}")
     async def api_meeting(meeting_id: str):

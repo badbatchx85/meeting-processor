@@ -75,8 +75,10 @@ export function Meetings() {
                 <td className="text-slate-500">{m.task_count}</td>
                 <td className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={() => runTranscribe(m.id)} disabled={transcribe.isPending}
-                      aria-label={`Gerar transcrição da ${m.title}`} title="Gerar transcrição"
+                    <button onClick={() => runTranscribe(m.id)}
+                      disabled={transcribe.isPending || m.source_exists === false}
+                      aria-label={`Gerar transcrição da ${m.title}`}
+                      title={m.source_exists === false ? "Arquivo de origem indisponível" : "Gerar transcrição"}
                       className="text-slate-400 hover:text-brand disabled:opacity-40">
                       <FileText size={16} />
                     </button>

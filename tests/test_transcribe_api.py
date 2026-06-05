@@ -93,3 +93,18 @@ def test_process_transcript_mode(client, config, tmp_path, monkeypatch):
             break
         _t.sleep(0.02)
     assert seen.get("to") is True
+
+
+def test_meetings_list_reports_source_exists(client, config, tmp_path):
+    config.watch_dir = str(tmp_path / "watch")
+    mid = _make_meeting(config, "reuniao.mp4")
+    # No media on disk yet → source_exists false.
+    r = client.get("/api/meetings")
+    assert r.status_code == 200
+    row = next(m for m in r.json() if m["id"] == mid)
+    assert row["source_exists"] is False
+    # Put the media in uploads/ → source_exists true.
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads" / "reuniao.mp4").write_bytes(b"1234")
+    row = next(m for m in client.get("/api/meetings").json() if m["id"] == mid)
+    assert row["source_exists"] is True

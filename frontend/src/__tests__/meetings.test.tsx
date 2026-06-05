@@ -74,3 +74,20 @@ describe("Meetings list", () => {
         String(url).endsWith("/api/meetings/m1/transcribe") && o?.method === "POST")).toBe(true));
   });
 });
+
+describe("Meetings list — source gating", () => {
+  it("disables per-row 'Gerar transcrição' when the source file is gone", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/history")) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response(JSON.stringify([
+        { id: "m1", title: "Sem origem", created: "", duration: "", task_count: 0,
+          participants: "", source_file: "", meeting_type: "", purpose: "",
+          has_summary: false, source_exists: false },
+      ]), { status: 200 });
+    }));
+    setup();
+    const btn = await screen.findByRole("button", { name: /Gerar transcrição da Sem origem/i });
+    expect(btn).toBeDisabled();
+  });
+});
