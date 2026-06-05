@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import type {
-  Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse,
+  Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse, Config,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -28,6 +28,9 @@ export const useStatus = () =>
 
 export const useLlm = () =>
   useQuery({ queryKey: ["llm"], queryFn: () => api.get<Llm>("/api/llm") });
+
+export const useConfig = () =>
+  useQuery({ queryKey: ["config"], queryFn: () => api.get<Config>("/api/config") });
 
 export const useMeetings = () =>
   useQuery({ queryKey: ["meetings"], queryFn: () => api.get<MeetingSummary[]>("/api/meetings") });
@@ -61,11 +64,19 @@ export function useSetProvider() {
 }
 
 export function useSetSteps() {
-  return useMutation({ mutationFn: (steps: Steps) => api.post("/api/config/steps", steps) });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (steps: Steps) => api.post("/api/config/steps", steps),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["config"] }),
+  });
 }
 
 export function useSetWatchDir() {
-  return useMutation({ mutationFn: (watch_dir: string) => api.post("/api/config/watch-dir", { watch_dir }) });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (watch_dir: string) => api.post("/api/config/watch-dir", { watch_dir }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["config"] }),
+  });
 }
 
 export function useProcessFile() {

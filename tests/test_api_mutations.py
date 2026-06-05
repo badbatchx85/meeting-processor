@@ -54,6 +54,28 @@ def test_set_watch_dir_returns_paths(client, tmp_path):
     assert body["exists"] is True
 
 
+def test_get_config_reports_current_steps_and_watch_dir(client, tmp_path):
+    # Persist a known state, then read it back through GET /api/config.
+    target = tmp_path / "videos"
+    target.mkdir()
+    client.post("/api/config/watch-dir", json={"watch_dir": str(target)})
+    client.post(
+        "/api/config/steps",
+        json={"summary": True, "note": False, "kanban": True, "wiki": False},
+    )
+
+    r = client.get("/api/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["watch_dir"] == str(target)
+    assert body["steps"] == {
+        "summary": True,
+        "note": False,
+        "kanban": True,
+        "wiki": False,
+    }
+
+
 def test_process_missing_file_returns_400(client):
     r = client.post("/api/process", json={"file": "/no/such/file.mp4"})
     assert r.status_code == 400

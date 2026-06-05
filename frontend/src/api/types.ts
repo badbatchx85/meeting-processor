@@ -28,3 +28,4 @@ export interface JobProgress {
   stage_percent: number; percent: number; detail: string;
 }
 export interface StatusResponse { watcher_alive: boolean; active: JobProgress[]; }
+export interface Config { watch_dir: string; steps: Steps; }

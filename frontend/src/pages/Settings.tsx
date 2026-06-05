@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { useToast } from "../components/Toast";
-import { useLlm, useSetProvider, useSetWatchDir, useSetSteps } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetWatchDir, useSetSteps } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import type { Steps } from "../api/types";
 
+const STEP_LABELS: { key: keyof Steps; label: string }[] = [
+  { key: "summary", label: "Resumo (IA)" },
+  { key: "note", label: "Nota Obsidian" },
+  { key: "kanban", label: "Kanban" },
+  { key: "wiki", label: "Wiki" },
+];
+
 export function Settings() {
   const llm = useLlm();
+  const config = useConfig();
   const setProvider = useSetProvider();
   const setWatchDir = useSetWatchDir();
   const setSteps = useSetSteps();
@@ -14,6 +22,14 @@ export function Settings() {
 
   const [watchDir, setWatchDirValue] = useState("");
   const [steps, setStepsValue] = useState<Steps>({ summary: true, note: true, kanban: true, wiki: true });
+
+  // Seed the form from the backend's current config once it loads.
+  useEffect(() => {
+    if (config.data) {
+      setWatchDirValue(config.data.watch_dir ?? "");
+      setStepsValue(config.data.steps);
+    }
+  }, [config.data]);
 
   const onError = (e: unknown) => toast("err", e instanceof ApiError ? e.message : "Erro");
 
@@ -40,11 +56,11 @@ export function Settings() {
 
       <Card title="Etapas do processamento">
         <div className="flex flex-col gap-2">
-          {(["summary", "note", "kanban", "wiki"] as const).map((k) => (
-            <label key={k} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={steps[k]}
-                onChange={(e) => setStepsValue((s) => ({ ...s, [k]: e.target.checked }))} />
-              {k}
+          {STEP_LABELS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={steps[key]}
+                onChange={(e) => setStepsValue((s) => ({ ...s, [key]: e.target.checked }))} />
+              {label}
             </label>
           ))}
           <button onClick={() => setSteps.mutate(steps, { onSuccess: () => toast("ok", "Etapas salvas."), onError })}

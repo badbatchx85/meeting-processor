@@ -12,6 +12,7 @@ import logging
 import re
 import shutil
 import threading
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -448,7 +449,16 @@ def create_app(config: Settings | None = None) -> FastAPI:
     if config is None:
         config = load_config()
 
-    app = FastAPI(title="Meeting Processor", version="1.1.0")
+    supervisor = get_supervisor(Path(config.project_root))
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        if supervisor.is_running():
+            logger.info("Frontend desligando — parando watcher também.")
+            supervisor.stop()
+
+    app = FastAPI(title="Meeting Processor", version="1.1.0", lifespan=lifespan)
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
     if STATIC_DIR.exists():
@@ -461,8 +471,6 @@ def create_app(config: Settings | None = None) -> FastAPI:
             StaticFiles(directory=str(_spa_assets)),
             name="spa-assets",
         )
-
-    supervisor = get_supervisor(Path(config.project_root))
 
     def _provider_label() -> str:
         labels = {
@@ -1009,6 +1017,18 @@ def create_app(config: Settings | None = None) -> FastAPI:
             },
         }
 
+    @app.get("/api/config")
+    async def api_get_config():
+        return {
+            "watch_dir": config.watch_dir,
+            "steps": {
+                "summary": config.enable_summary,
+                "note": config.enable_note,
+                "kanban": config.enable_kanban,
+                "wiki": config.enable_wiki,
+            },
+        }
+
     @app.post("/api/config/watch-dir")
     async def api_set_watch_dir(payload: dict):
         watch_dir = (payload or {}).get("watch_dir", "")
@@ -1207,12 +1227,6 @@ def create_app(config: Settings | None = None) -> FastAPI:
             }
             for t in all_tasks
         ]
-
-    @app.on_event("shutdown")
-    def _shutdown():
-        if supervisor.is_running():
-            logger.info("Frontend desligando — parando watcher também.")
-            supervisor.stop()
 
     return app
 
