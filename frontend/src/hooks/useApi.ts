@@ -67,6 +67,18 @@ export function useSetProvider() {
   });
 }
 
+export function useSetModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { provider: string; model: string }) =>
+      api.post("/api/llm/model", v),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["llm"] });
+      qc.invalidateQueries({ queryKey: ["health"] });
+    },
+  });
+}
+
 export function useSetSteps() {
   const qc = useQueryClient();
   return useMutation({

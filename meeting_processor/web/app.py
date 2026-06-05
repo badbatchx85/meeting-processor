@@ -30,6 +30,7 @@ from . import meeting_export, spa_serving
 from .runtime import (
     VALID_PROVIDERS,
     get_supervisor,
+    set_llm_model,
     set_llm_provider,
     set_pipeline_steps,
     set_watch_dir,
@@ -1130,6 +1131,19 @@ def create_app(config: Settings | None = None) -> FastAPI:
             },
         }
 
+    @app.post("/api/llm/model")
+    async def api_set_model(payload: dict):
+        p = payload or {}
+        result = set_llm_model(config, p.get("provider", ""), p.get("model", ""))
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Modelo inválido")},
+                status_code=400,
+            )
+        if supervisor.is_running():
+            supervisor.restart()
+        return {"ok": True, "llm": _llm_info()}
+
     @app.get("/api/config")
     async def api_get_config():
         return {
@@ -1269,16 +1283,21 @@ def create_app(config: Settings | None = None) -> FastAPI:
             )
         return {"ok": True}
 
-    @app.get("/api/llm")
-    async def api_llm():
+    def _llm_info() -> dict:
         return {
             "provider": config.llm_provider,
             "label": _provider_label(),
             "anthropic_model": config.anthropic_model,
+            "openai_model": config.openai_model,
+            "gemini_model": config.gemini_model,
             "ollama_model": config.ollama_model,
             "anthropic_key_set": bool(config.anthropic_api_key),
             "valid_providers": list(VALID_PROVIDERS),
         }
+
+    @app.get("/api/llm")
+    async def api_llm():
+        return _llm_info()
 
     # ---- Export de tarefas ---------------------------------------------
 

@@ -5,7 +5,8 @@ export interface Watcher {
   running: boolean; pid: number | null; started_at: string | null; exit_code: number | null;
 }
 export interface Llm {
-  provider: string; label: string; anthropic_model: string; ollama_model: string;
+  provider: string; label: string;
+  anthropic_model: string; openai_model: string; gemini_model: string; ollama_model: string;
   anthropic_key_set: boolean; valid_providers: string[];
 }
 export interface MeetingSummary {

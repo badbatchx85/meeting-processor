@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { useToast } from "../components/Toast";
-import { useConfig, useLlm, useSetProvider, useSetWatchDir, useSetSteps } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetModel, useSetWatchDir, useSetSteps } from "../hooks/useApi";
 import { ApiError } from "../api/client";
-import type { Steps } from "../api/types";
+import type { Llm, Steps } from "../api/types";
 
 const STEP_LABELS: { key: keyof Steps; label: string }[] = [
   { key: "summary", label: "Resumo (IA)" },
@@ -12,16 +12,38 @@ const STEP_LABELS: { key: keyof Steps; label: string }[] = [
   { key: "wiki", label: "Wiki" },
 ];
 
+// Modelos sugeridos por provedor (atalhos de UI; "Outro…" aceita qualquer id).
+const MODEL_OPTIONS: Record<string, string[]> = {
+  anthropic: ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"],
+  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
+  gemini: ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
+  local: ["qwen2.5:14b", "llama3.1:8b", "mistral"],
+};
+const CUSTOM = "__custom__";
+
+// O modelo atual de um provedor, conforme o backend (/api/llm).
+function currentModel(llm: Llm | undefined, provider: string): string {
+  if (!llm) return "";
+  if (provider === "local") return llm.ollama_model ?? "";
+  if (provider === "openai") return llm.openai_model ?? "";
+  if (provider === "gemini") return llm.gemini_model ?? "";
+  if (provider === "anthropic") return llm.anthropic_model ?? "";
+  return "";
+}
+
 export function Settings() {
   const llm = useLlm();
   const config = useConfig();
   const setProvider = useSetProvider();
+  const setModel = useSetModel();
   const setWatchDir = useSetWatchDir();
   const setSteps = useSetSteps();
   const toast = useToast();
 
   const [watchDir, setWatchDirValue] = useState("");
   const [steps, setStepsValue] = useState<Steps>({ summary: true, note: true, kanban: true, wiki: true });
+  const [model, setModelValue] = useState("");
+  const [custom, setCustom] = useState(false);
 
   // Seed the form from the backend's current config once it loads.
   useEffect(() => {
@@ -31,17 +53,66 @@ export function Settings() {
     }
   }, [config.data]);
 
+  const provider = llm.data?.provider ?? "";
+  // Seed the model from the active provider's current value.
+  useEffect(() => {
+    setModelValue(currentModel(llm.data, provider));
+    setCustom(false);
+  }, [llm.data, provider]);
+
   const onError = (e: unknown) => toast("err", e instanceof ApiError ? e.message : "Erro");
+
+  const modelOptions = provider in MODEL_OPTIONS
+    ? Array.from(new Set([...MODEL_OPTIONS[provider], model].filter(Boolean)))
+    : [];
+
+  const saveModel = () =>
+    setModel.mutate(
+      { provider, model: model.trim() },
+      { onSuccess: () => toast("ok", "Modelo atualizado."), onError },
+    );
 
   return (
     <div className="grid max-w-2xl gap-6">
       <Card title="Provedor LLM">
-        <select value={llm.data?.provider ?? ""} disabled={!llm.data}
-          onChange={(e) => setProvider.mutate(e.target.value, {
-            onSuccess: () => toast("ok", "Provedor atualizado."), onError })}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          {(llm.data?.valid_providers ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-slate-600">Provedor</span>
+            <select value={provider} disabled={!llm.data}
+              onChange={(e) => setProvider.mutate(e.target.value, {
+                onSuccess: () => toast("ok", "Provedor atualizado."), onError })}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              {(llm.data?.valid_providers ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+
+          {provider in MODEL_OPTIONS && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-slate-600">Modelo</span>
+              <div className="flex gap-2">
+                <select aria-label="Modelo"
+                  value={custom ? CUSTOM : model}
+                  onChange={(e) => {
+                    if (e.target.value === CUSTOM) { setCustom(true); setModelValue(""); }
+                    else { setCustom(false); setModelValue(e.target.value); }
+                  }}
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                  <option value={CUSTOM}>Outro (personalizado)…</option>
+                </select>
+                <button onClick={saveModel} disabled={setModel.isPending || !model.trim()}
+                  className="rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
+                  Salvar modelo
+                </button>
+              </div>
+              {custom && (
+                <input value={model} onChange={(e) => setModelValue(e.target.value)}
+                  placeholder="id do modelo (ex.: gpt-4o, gemini-1.5-pro)"
+                  className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              )}
+            </label>
+          )}
+        </div>
       </Card>
 
       <Card title="Pasta monitorada">

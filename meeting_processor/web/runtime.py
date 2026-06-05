@@ -239,6 +239,33 @@ def set_llm_provider(config: Settings, provider: str) -> dict:
     }
 
 
+# Provedor -> (campo no Settings, variável de ambiente). "none" não tem modelo.
+_MODEL_FIELDS = {
+    "anthropic": ("anthropic_model", "MEETING_ANTHROPIC_MODEL"),
+    "openai": ("openai_model", "MEETING_OPENAI_MODEL"),
+    "gemini": ("gemini_model", "MEETING_GEMINI_MODEL"),
+    "local": ("ollama_model", "MEETING_OLLAMA_MODEL"),
+}
+
+
+def set_llm_model(config: Settings, provider: str, model: str) -> dict:
+    """Altera o modelo de um provedor em runtime e persiste no ``.env``."""
+    provider = (provider or "").lower().strip()
+    if provider == "ollama":
+        provider = "local"
+    if provider not in _MODEL_FIELDS:
+        return {"ok": False, "error": f"Provedor sem modelo configurável: {provider}"}
+    model = (model or "").strip()
+    if not model:
+        return {"ok": False, "error": "Modelo vazio"}
+
+    field, env_key = _MODEL_FIELDS[provider]
+    persist_env_setting(Path(config.project_root), env_key, model)
+    setattr(config, field, model)
+    logger.info("Modelo de %s alterado para: %s", provider, model)
+    return {"ok": True, "provider": provider, "model": model}
+
+
 def set_pipeline_steps(
     config: Settings,
     *,
