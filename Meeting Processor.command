@@ -3,12 +3,23 @@
 # Meeting Processor — launcher de duplo-clique (macOS/Linux)
 # ============================================================
 # Dê duplo clique neste arquivo no Finder. Ele:
-#   1. compila a interface React (SPA) na primeira vez, se possível;
-#   2. inicia o servidor local;
-#   3. abre o navegador na aplicação;
-#   4. mostra os logs. Feche esta janela (ou Ctrl-C) para parar.
+#   1. instala dependências novas, se faltarem (ex.: python-docx);
+#   2. compila a interface React (SPA) na primeira vez ou após uma atualização;
+#   3. inicia o servidor local;
+#   4. abre o navegador na aplicação;
+#   5. mostra os logs. Feche esta janela (ou Ctrl-C) para parar.
 #
 # Não precisa de terminal nem de comandos — é só o duplo clique.
+#
+# Na interface (SPA) você pode:
+#   - enviar/processar um vídeo e acompanhar o progresso por etapas no Dashboard;
+#   - ver todas as reuniões (inclusive as "só transcrição") e ler a transcrição;
+#   - gerar o resumo (propósito, tipo, decisões, tarefas) de uma reunião que só
+#     tem transcrição, pelo botão "Gerar resumo" — sem re-transcrever;
+#   - exportar o resumo em Markdown ou Word (.docx);
+#   - ver o histórico de conversões, com sucessos e falhas (e o motivo).
+#
+# Logs do Whisper para diagnóstico de erros: whisper-debug.log (na raiz).
 
 PORT=8765
 URL="http://127.0.0.1:${PORT}/"
