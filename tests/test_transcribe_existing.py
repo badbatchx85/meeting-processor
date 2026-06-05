@@ -36,3 +36,55 @@ def test_locate_source_missing_returns_none(config, tmp_path):
     config.watch_dir = str(tmp_path / "watch")
     mid = _make_meeting(config, "reuniao.mp4")
     assert locate_source_file(config, config.reunioes_path / mid) is None
+
+
+def test_transcribe_existing_overwrites_and_logs(config, tmp_path, monkeypatch):
+    from meeting_processor import generation_log
+    from meeting_processor.pipeline import MeetingPipeline
+
+    config.watch_dir = str(tmp_path / "watch")
+    mid = _make_meeting(config, "reuniao.mp4")
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads" / "reuniao.mp4").write_bytes(b"fake")
+
+    # Avoid touching ffmpeg/whisper: stub audio extraction + transcriber.
+    monkeypatch.setattr(
+        "meeting_processor.pipeline.extract_audio",
+        lambda src, cfg: tmp_path / "audio.wav",
+    )
+    (tmp_path / "audio.wav").write_bytes(b"x")
+    new_transcript = Transcript(
+        segments=[
+            TranscriptSegment(start=0.0, end=3.0, text="Texto novo um."),
+            TranscriptSegment(start=3.0, end=6.0, text="Texto novo dois."),
+        ],
+        full_text="Texto novo um. Texto novo dois.",
+        language="pt",
+        duration=6.0,
+    )
+
+    class _FakeTranscriber:
+        def __init__(self, *a, **k): ...
+        def transcribe(self, audio_path, progress_callback=None):
+            return new_transcript
+
+    monkeypatch.setattr("meeting_processor.pipeline.WhisperTranscriber", lambda cfg: _FakeTranscriber())
+
+    MeetingPipeline(config).transcribe_existing(mid)
+
+    raw = next((config.reunioes_path / mid).glob("Transcricao - *.md")).read_text(encoding="utf-8")
+    assert "Texto novo um." in raw
+    entries = generation_log.read(config.reunioes_path / mid)
+    assert entries and entries[0]["action"] == "transcript" and entries[0]["status"] == "ok"
+
+
+def test_transcribe_existing_no_source_logs_error(config, tmp_path):
+    from meeting_processor import generation_log
+    from meeting_processor.pipeline import MeetingPipeline
+
+    config.watch_dir = str(tmp_path / "watch")
+    mid = _make_meeting(config, "reuniao.mp4")  # no media file on disk
+    MeetingPipeline(config).transcribe_existing(mid)
+    entries = generation_log.read(config.reunioes_path / mid)
+    assert entries and entries[0]["action"] == "transcript" and entries[0]["status"] == "error"
+    assert "não encontrado" in entries[0]["error"]
