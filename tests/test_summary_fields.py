@@ -122,3 +122,4 @@ def test_note_omits_empty_new_sections(tmp_path):
     assert "## Propósito" not in note
     assert "## Decisões" not in note
     assert "## Questões em Aberto" not in note
+    assert "**Tipo:** " not in note
