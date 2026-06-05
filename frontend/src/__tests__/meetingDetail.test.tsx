@@ -29,7 +29,7 @@ describe("MeetingDetail", () => {
   it("shows summary by default and switches to transcript tab", async () => {
     setup();
     expect(await screen.findByText("Resumo aqui")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Transcrição/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Transcrição$/ }));
     expect(await screen.findByText(/linha de transcrição/)).toBeInTheDocument();
   });
 

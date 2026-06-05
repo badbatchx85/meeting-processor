@@ -21,10 +21,14 @@ function setup() {
 }
 
 function stubFetch(resumo_md: string) {
-  return vi.fn(async (_url: string, opts?: RequestInit) => {
+  return vi.fn(async (url: string, opts?: RequestInit) => {
+    const u = String(url);
     if (opts?.method === "POST") {
       return new Response(JSON.stringify({ ok: true, queued: true, meeting_id: "abc" }), { status: 200 });
     }
+    if (u.includes("/source"))
+      return new Response(JSON.stringify({ exists: true, name: "x.mp4", path: "/x.mp4", size: 1 }), { status: 200 });
+    if (u.includes("/log")) return new Response(JSON.stringify([]), { status: 200 });
     return new Response(
       JSON.stringify({ id: "abc", title: "abc", meta: {}, resumo_md, tasks: [], transcricao_md: "linha" }),
       { status: 200 },
@@ -53,10 +57,10 @@ describe("MeetingDetail — generate summary", () => {
     );
   });
 
-  it("hides the button when a summary already exists", async () => {
+  it("shows 'Gerar resumo' even when a summary already exists", async () => {
     vi.stubGlobal("fetch", stubFetch("# Resumo aqui"));
     setup();
     expect(await screen.findByText("Resumo aqui")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Gerar resumo/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Gerar resumo/i })).toBeInTheDocument();
   });
 });
