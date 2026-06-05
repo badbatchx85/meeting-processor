@@ -215,7 +215,12 @@ class MeetingPipeline:
 
     def summarize_existing(self, meeting_id: str) -> None:
         """Gera o resumo de uma reunião já transcrita (sem re-transcrever)."""
-        meeting_dir = self.config.reunioes_path / meeting_id
+        # Defesa contra path traversal: meeting_dir deve ser filho direto de
+        # reunioes/ (sem ``..`` nem separadores em meeting_id).
+        base = self.config.reunioes_path.resolve()
+        meeting_dir = (base / meeting_id).resolve()
+        if meeting_dir.parent != base:
+            raise FileNotFoundError(f"Reunião inválida: {meeting_id}")
         transcricoes = list(meeting_dir.glob("Transcricao - *.md"))
         if not meeting_dir.is_dir() or not transcricoes:
             raise FileNotFoundError(

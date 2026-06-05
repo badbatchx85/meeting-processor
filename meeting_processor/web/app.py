@@ -157,9 +157,23 @@ def _history_entry(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _reunioes_dir(vault_path: Path, meeting_id: str) -> Path | None:
+    """Resolve ``meeting_id`` para um filho DIRETO de ``wiki/reunioes/``.
+
+    Defesa contra path traversal: ``meeting_id`` vem da URL. Resolvemos o
+    caminho e exigimos que seja filho direto da base; qualquer ``..`` ou
+    separador (ex.: ``../x``, ``a/b``) cai fora e devolve ``None``.
+    """
+    base = (vault_path / "wiki" / "reunioes").resolve()
+    target = (base / meeting_id).resolve()
+    if target.parent != base:
+        return None
+    return target
+
+
 def _load_meeting(vault_path: Path, meeting_id: str) -> dict[str, Any]:
-    base = vault_path / "wiki" / "reunioes" / meeting_id
-    if not base.exists():
+    base = _reunioes_dir(vault_path, meeting_id)
+    if base is None or not base.exists():
         raise FileNotFoundError(meeting_id)
 
     resumo_paths = list(base.glob("Resumo - *.md"))
@@ -210,8 +224,8 @@ def _delete_meeting(
     Returns:
         dict com ``ok`` e detalhes do que foi removido.
     """
-    base = vault_path / "wiki" / "reunioes" / meeting_id
-    if not base.exists() or not base.is_dir():
+    base = _reunioes_dir(vault_path, meeting_id)
+    if base is None or not base.exists() or not base.is_dir():
         return {"ok": False, "error": f"Reunião não encontrada: {meeting_id}"}
 
     # 1. Captura source_file do frontmatter (se possível) para limpar marker
@@ -1025,8 +1039,10 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
     @app.post("/api/meetings/{meeting_id}/summarize")
     async def api_summarize(meeting_id: str):
-        meeting_dir = config.vault_path / "wiki" / "reunioes" / meeting_id
-        if not meeting_dir.is_dir() or not list(meeting_dir.glob("Transcricao - *.md")):
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir() or not list(
+            meeting_dir.glob("Transcricao - *.md")
+        ):
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
 
         def _run():
