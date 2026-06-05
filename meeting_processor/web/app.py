@@ -25,7 +25,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, load_config
 from ..dashboard import STAGES
-from . import spa_serving
+from . import meeting_export, spa_serving
 from .runtime import (
     VALID_PROVIDERS,
     get_supervisor,
@@ -129,6 +129,8 @@ def _list_meetings(vault_path: Path) -> list[dict[str, Any]]:
                 "task_count": task_count,
                 "participants": meta.get("participants", ""),
                 "source_file": meta.get("source_file", ""),
+                "meeting_type": meta.get("meeting_type", ""),
+                "purpose": meta.get("purpose", ""),
             }
         )
     return meetings
@@ -969,6 +971,36 @@ def create_app(config: Settings | None = None) -> FastAPI:
             return _load_meeting(config.vault_path, meeting_id)
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Reunião não encontrada")
+
+    @app.get("/api/meetings/{meeting_id}/export.md")
+    async def api_export_md(meeting_id: str):
+        try:
+            meeting = _load_meeting(config.vault_path, meeting_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        body = meeting_export.to_markdown(meeting)
+        return _attachment_response(
+            body, f"{meeting_id}.md", "text/markdown; charset=utf-8"
+        )
+
+    @app.get("/api/meetings/{meeting_id}/export.docx")
+    async def api_export_docx(meeting_id: str):
+        try:
+            meeting = _load_meeting(config.vault_path, meeting_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        data = meeting_export.to_docx(meeting)
+        return Response(
+            content=data,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
+            headers={
+                "Content-Disposition": f'attachment; filename="{meeting_id}.docx"',
+                "Cache-Control": "no-store",
+            },
+        )
 
     @app.get("/api/watcher")
     async def api_watcher():

@@ -46,6 +46,8 @@ Responda APENAS com JSON válido, sem markdown, sem blocos de código. O JSON de
 
 {
   "executive_summary": "Resumo executivo de 3-5 frases",
+  "purpose": "Uma frase: por que a reunião aconteceu / qual o objetivo",
+  "meeting_type": "Rótulo curto do tipo de reunião (ex.: daily, 1:1, planejamento, retrospectiva, reunião com cliente, brainstorm) ou string vazia",
   "time_windows": [
     {
       "start_minutes": 0,
@@ -53,6 +55,7 @@ Responda APENAS com JSON válido, sem markdown, sem blocos de código. O JSON de
       "summary": "Resumo do que foi discutido neste período"
     }
   ],
+  "decisions": ["Decisão tomada na reunião"],
   "action_items": [
     {
       "description": "Descrição clara da tarefa",
@@ -62,14 +65,19 @@ Responda APENAS com JSON válido, sem markdown, sem blocos de código. O JSON de
       "source_timestamp": "MM:SS aproximado de quando foi mencionada"
     }
   ],
+  "open_questions": ["Questão em aberto, risco ou bloqueio levantado mas não resolvido"],
   "participants": ["Nome1", "Nome2"],
   "key_topics": ["Tópico 1", "Tópico 2"]
 }
 
 Regras:
 - O resumo executivo deve capturar as decisões principais e o tom geral da reunião.
+- "purpose" deve ser uma única frase com o objetivo central da reunião; use string vazia se não der para inferir.
+- "meeting_type" é um rótulo curto inferido do conteúdo; use string vazia se não estiver claro.
 - Cada time_window cobre um bloco de {chunk_minutes} minutos da reunião.
+- "decisions" lista apenas decisões efetivamente tomadas (distintas das tarefas); use lista vazia se não houver.
 - Extraia TODAS as tarefas, ações e compromissos mencionados, mesmo os implícitos.
+- "open_questions" lista perguntas/riscos/bloqueios levantados e não resolvidos; use lista vazia se não houver.
 - Se não conseguir identificar participantes pelo nome, use "Participante 1", etc.
 - Se não houver tarefas, retorne uma lista vazia para action_items.
 - Tópicos principais devem ser 3-5 temas centrais discutidos.\
@@ -202,6 +210,10 @@ class _BaseSummarizer:
             action_items=[ActionItem(**ai) for ai in data.get("action_items", [])],
             participants=data.get("participants", []),
             key_topics=data.get("key_topics", []),
+            purpose=data.get("purpose", ""),
+            meeting_type=data.get("meeting_type", ""),
+            decisions=data.get("decisions", []),
+            open_questions=data.get("open_questions", []),
         )
 
     @staticmethod
@@ -212,6 +224,10 @@ class _BaseSummarizer:
             action_items=[],
             participants=[],
             key_topics=[],
+            purpose="",
+            meeting_type="",
+            decisions=[],
+            open_questions=[],
         )
 
 # ---------------------------------------------------------------------------

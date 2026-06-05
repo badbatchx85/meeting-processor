@@ -36,6 +36,10 @@ class MeetingSummary(BaseModel):
     action_items: list[ActionItem]
     participants: list[str]
     key_topics: list[str]
+    purpose: str = ""
+    meeting_type: str = ""
+    decisions: list[str] = []
+    open_questions: list[str] = []
 
 
 class ProcessingResult(BaseModel):

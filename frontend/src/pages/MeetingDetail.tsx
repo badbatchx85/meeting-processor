@@ -21,11 +21,26 @@ export function MeetingDetail() {
   if (meeting.isLoading) return <p className="text-slate-500">Carregando…</p>;
   if (meeting.isError || !meeting.data) return <p className="text-rose-600">Reunião não encontrada.</p>;
   const d = meeting.data;
+  const enc = encodeURIComponent(id);
 
   return (
     <Card title={d.title} actions={
-      <a href={obsidianUri} className="text-sm text-brand hover:underline">Abrir no Obsidian</a>
+      <div className="flex items-center gap-3 text-sm">
+        <a href={`/api/meetings/${enc}/export.md`} className="text-brand hover:underline">Markdown</a>
+        <a href={`/api/meetings/${enc}/export.docx`} className="text-brand hover:underline">Word</a>
+        <a href={obsidianUri} className="text-brand hover:underline">Abrir no Obsidian</a>
+      </div>
     }>
+      {(d.meta.purpose || d.meta.meeting_type) && (
+        <div className="mb-4 flex items-center gap-2">
+          {d.meta.meeting_type && (
+            <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-brand">
+              {d.meta.meeting_type}
+            </span>
+          )}
+          {d.meta.purpose && <p className="text-sm text-slate-600">{d.meta.purpose}</p>}
+        </div>
+      )}
       <div className="mb-4 flex gap-1 border-b border-slate-200">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}

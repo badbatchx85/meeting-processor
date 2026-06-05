@@ -11,6 +11,7 @@ export interface Llm {
 export interface MeetingSummary {
   id: string; title: string; created: string; duration: string;
   task_count: number; participants: string; source_file: string;
+  meeting_type: string; purpose: string;
 }
 export interface MeetingTask { done: boolean; description: string; }
 export interface MeetingDetail {

@@ -18,8 +18,11 @@ function setup() {
 describe("MeetingDetail", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
-      id: "abc", title: "abc", meta: {}, resumo_md: "# Resumo aqui",
-      tasks: [{ done: false, description: "Tarefa 1" }], transcricao_md: "linha de transcrição",
+      id: "abc", title: "abc",
+      meta: { purpose: "Alinhar o roadmap", meeting_type: "planejamento" },
+      resumo_md: "# Resumo aqui",
+      tasks: [{ done: false, description: "Tarefa 1" }],
+      transcricao_md: "linha de transcrição",
     }), { status: 200 })));
   });
 
@@ -28,5 +31,15 @@ describe("MeetingDetail", () => {
     expect(await screen.findByText("Resumo aqui")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Transcrição/i }));
     expect(await screen.findByText(/linha de transcrição/)).toBeInTheDocument();
+  });
+
+  it("renders purpose, a type badge, and export links", async () => {
+    setup();
+    expect(await screen.findByText("Alinhar o roadmap")).toBeInTheDocument();
+    expect(screen.getByText("planejamento")).toBeInTheDocument();
+    const md = screen.getByRole("link", { name: /Markdown/i });
+    const docx = screen.getByRole("link", { name: /Word/i });
+    expect(md).toHaveAttribute("href", "/api/meetings/abc/export.md");
+    expect(docx).toHaveAttribute("href", "/api/meetings/abc/export.docx");
   });
 });
