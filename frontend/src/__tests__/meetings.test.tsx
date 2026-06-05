@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { Meetings } from "../pages/Meetings";
@@ -50,5 +50,27 @@ describe("Meetings list", () => {
     setup();
     expect(await screen.findByText("Só Transcrição")).toBeInTheDocument();
     expect(screen.getByText("só transcrição")).toBeInTheDocument();
+  });
+
+  it("per-row buttons POST to transcribe and summarize", async () => {
+    const f = vi.fn(async (url: string, opts?: RequestInit) => {
+      const u = String(url);
+      if (opts?.method === "POST")
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      if (u.includes("/api/meetings"))
+        return new Response(JSON.stringify([
+          { id: "m1", title: "Reunião 1", created: "", duration: "", task_count: 0,
+            participants: "", source_file: "", meeting_type: "", purpose: "", has_summary: false },
+        ]), { status: 200 });
+      if (u.includes("/api/history")) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response(JSON.stringify([]), { status: 200 });
+    });
+    vi.stubGlobal("fetch", f);
+    setup();
+    const tBtn = await screen.findByRole("button", { name: /Gerar transcrição da Reunião 1/i });
+    fireEvent.click(tBtn);
+    await waitFor(() =>
+      expect(f.mock.calls.some(([url, o]) =>
+        String(url).endsWith("/api/meetings/m1/transcribe") && o?.method === "POST")).toBe(true));
   });
 });
