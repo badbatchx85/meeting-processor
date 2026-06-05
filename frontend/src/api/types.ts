@@ -44,3 +44,14 @@ export interface StatusResponse { watcher_alive: boolean; active: JobProgress[];
 export interface Config { watch_dir: string; steps: Steps; }
 export interface LocalModels { ollama_running: boolean; installed: string[]; suggested: string[]; }
 export interface PullStatus { model?: string; percent?: number; status?: string; done?: boolean; error?: string | null; }
+export interface GenerationLogEntry {
+  action: "transcript" | "summary" | "delete_source";
+  status: "ok" | "error";
+  error: string | null;
+  detail: string;
+  started: string;
+  completed: string | null;
+}
+export interface SourceInfo {
+  exists: boolean; name: string; path: string; size: number | null;
+}
