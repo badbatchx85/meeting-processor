@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from meeting_processor.config import load_config
 from meeting_processor.web.app import create_app
+from meeting_processor.web.runtime import VALID_PROVIDERS
 
 
 def main() -> None:
@@ -105,7 +106,7 @@ def main() -> None:
     # 10. info do LLM (JSON)
     r = client.get("/api/llm")
     body = r.json() if r.status_code == 200 else {}
-    if r.status_code == 200 and body.get("provider") in ("anthropic", "local"):
+    if r.status_code == 200 and body.get("provider") in VALID_PROVIDERS:
         print(f"OK  GET /api/llm (provider={body['provider']})")
     else:
         failures += 1
