@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Play, Square, RotateCw, FileVideo, Upload, Loader2 } from "lucide-react";
+import { Play, Square, RotateCw, FileVideo, Upload } from "lucide-react";
 import { Card } from "../components/Card";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { useToast } from "../components/Toast";
 import { useHealth, useWatcher, useMeetings, useWatcherControl, useProcessFile, useUploadFile, useStatus, useHistory } from "../hooks/useApi";
 import { ConversionHistory } from "../components/ConversionHistory";
+import { ProcessingStepper } from "../components/ProcessingStepper";
 import { ApiError } from "../api/client";
 
 function formatBytes(n: number): string {
@@ -132,26 +133,9 @@ export function Dashboard() {
       {status.data && status.data.active.length > 0 && (
         <div className="lg:col-span-2">
           <Card title="Em processamento">
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-6">
               {status.data.active.map((job) => (
-                <div key={job.file} className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 truncate font-medium text-slate-700">
-                      <Loader2 size={15} className="shrink-0 animate-spin text-brand" />
-                      {job.file}
-                    </span>
-                    <span className="ml-3 shrink-0 text-xs text-slate-400">
-                      {job.stage_number > 0 ? `Etapa ${job.stage_number}/${job.stage_total}` : "Aguardando"}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                    <div className="h-full bg-brand transition-all duration-500" style={{ width: `${job.percent}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span className="truncate">{job.stage_label}{job.detail ? ` · ${job.detail}` : ""}</span>
-                    <span className="ml-3 shrink-0 font-medium text-slate-600">{job.percent}%</span>
-                  </div>
-                </div>
+                <ProcessingStepper key={job.file} job={job} />
               ))}
             </div>
           </Card>

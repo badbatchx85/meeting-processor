@@ -431,6 +431,27 @@ def _job_progress(entry: dict[str, Any]) -> dict[str, Any]:
     stage_idx = entry.get("stage", -1)
     stage_progress = entry.get("stage_progress") or {}
     details = entry.get("details") or {}
+    skipped = set(entry.get("skipped") or [])
+
+    stages: list[dict[str, Any]] = []
+    for i, (key, label) in enumerate(STAGES):
+        if key in skipped:
+            state, pct = "skipped", 0
+        elif i < stage_idx:
+            state, pct = "done", 100
+        elif i == stage_idx:
+            state, pct = "active", int(stage_progress.get(key, 0))
+        else:
+            state, pct = "pending", 0
+        stages.append(
+            {
+                "key": key,
+                "label": label,
+                "state": state,
+                "percent": pct,
+                "detail": details.get(key, ""),
+            }
+        )
 
     if 0 <= stage_idx < total:
         key, label = STAGES[stage_idx]
@@ -452,6 +473,7 @@ def _job_progress(entry: dict[str, Any]) -> dict[str, Any]:
         "stage_percent": stage_percent,
         "percent": percent,
         "detail": detail,
+        "stages": stages,
     }
 
 

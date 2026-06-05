@@ -185,6 +185,7 @@ class Dashboard:
                 "details": j.details,
                 "stage": j.current_stage,
                 "stage_progress": dict(j.stage_progress),
+                "skipped": sorted(j.skipped),
                 "error_message": j.error_message or None,
                 "failed_stage": self._stage_label_at(j.current_stage)
                 if j.status == "error"

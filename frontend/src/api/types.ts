@@ -27,10 +27,16 @@ export interface Task {
   done: boolean; assignee: string; priority: string; due_date: string; timestamp: string;
 }
 export interface Steps { summary: boolean; note: boolean; kanban: boolean; wiki: boolean; }
+export interface StageStep {
+  key: string; label: string;
+  state: "done" | "active" | "pending" | "skipped";
+  percent: number; detail: string;
+}
 export interface JobProgress {
   file: string; status: string;
   stage_number: number; stage_total: number; stage_label: string;
   stage_percent: number; percent: number; detail: string;
+  stages: StageStep[];
 }
 export interface StatusResponse { watcher_alive: boolean; active: JobProgress[]; }
 export interface Config { watch_dir: string; steps: Steps; }
