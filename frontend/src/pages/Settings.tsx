@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { useToast } from "../components/Toast";
-import { useConfig, useLlm, useSetProvider, useSetModel, useSetWatchDir, useSetSteps } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import type { Llm, Steps } from "../api/types";
+
+// Provedores que usam chave de API (local/none não usam).
+const KEY_PROVIDERS = ["anthropic", "openai", "gemini"] as const;
+function keyIsSet(llm: Llm | undefined, provider: string): boolean {
+  if (!llm) return false;
+  if (provider === "anthropic") return llm.anthropic_key_set;
+  if (provider === "openai") return llm.openai_key_set;
+  if (provider === "gemini") return llm.gemini_key_set;
+  return false;
+}
 
 const STEP_LABELS: { key: keyof Steps; label: string }[] = [
   { key: "summary", label: "Resumo (IA)" },
@@ -17,7 +27,7 @@ const MODEL_OPTIONS: Record<string, string[]> = {
   anthropic: ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"],
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
   gemini: ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
-  local: ["qwen2.5:14b", "llama3.1:8b", "mistral"],
+  local: ["qwen2.5:7b", "qwen2.5:14b", "llama3.1:8b", "gemma2:9b"],
 };
 const CUSTOM = "__custom__";
 
@@ -36,6 +46,7 @@ export function Settings() {
   const config = useConfig();
   const setProvider = useSetProvider();
   const setModel = useSetModel();
+  const setKey = useSetKey();
   const setWatchDir = useSetWatchDir();
   const setSteps = useSetSteps();
   const toast = useToast();
@@ -44,6 +55,7 @@ export function Settings() {
   const [steps, setStepsValue] = useState<Steps>({ summary: true, note: true, kanban: true, wiki: true });
   const [model, setModelValue] = useState("");
   const [custom, setCustom] = useState(false);
+  const [apiKey, setApiKey] = useState("");
 
   // Seed the form from the backend's current config once it loads.
   useEffect(() => {
@@ -72,6 +84,15 @@ export function Settings() {
       { onSuccess: () => toast("ok", "Modelo atualizado."), onError },
     );
 
+  const saveKey = () =>
+    setKey.mutate(
+      { provider, key: apiKey.trim() },
+      {
+        onSuccess: () => { toast("ok", "Chave salva."); setApiKey(""); },
+        onError,
+      },
+    );
+
   return (
     <div className="grid max-w-2xl gap-6">
       <Card title="Provedor LLM">
@@ -85,6 +106,28 @@ export function Settings() {
               {(llm.data?.valid_providers ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </label>
+
+          {(KEY_PROVIDERS as readonly string[]).includes(provider) && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="flex items-center gap-2 text-slate-600">
+                Chave de API
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  keyIsSet(llm.data, provider) ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                  {keyIsSet(llm.data, provider) ? "✓ configurada" : "não configurada"}
+                </span>
+              </span>
+              <div className="flex gap-2">
+                <input type="password" aria-label="Chave de API"
+                  value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={keyIsSet(llm.data, provider) ? "•••••••• (já configurada — cole para trocar)" : "cole a chave de API"}
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <button onClick={saveKey} disabled={setKey.isPending || !apiKey.trim()}
+                  className="rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
+                  Salvar chave
+                </button>
+              </div>
+            </label>
+          )}
 
           {provider in MODEL_OPTIONS && (
             <label className="flex flex-col gap-1 text-sm">

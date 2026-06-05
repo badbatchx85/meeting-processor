@@ -266,6 +266,35 @@ def set_llm_model(config: Settings, provider: str, model: str) -> dict:
     return {"ok": True, "provider": provider, "model": model}
 
 
+# Provedor -> (campo da chave no Settings, variável de ambiente).
+_KEY_FIELDS = {
+    "anthropic": ("anthropic_api_key", "ANTHROPIC_API_KEY"),
+    "openai": ("openai_api_key", "OPENAI_API_KEY"),
+    "gemini": ("gemini_api_key", "GEMINI_API_KEY"),
+}
+
+
+def set_llm_key(config: Settings, provider: str, key: str) -> dict:
+    """Grava a chave de API de um provedor no ``.env`` (write-only).
+
+    Nunca devolve o valor da chave nem o registra em log.
+    """
+    provider = (provider or "").lower().strip()
+    if provider == "ollama":
+        provider = "local"
+    if provider not in _KEY_FIELDS:
+        return {"ok": False, "error": f"Provedor sem chave de API: {provider}"}
+    key = (key or "").strip()
+    if not key:
+        return {"ok": False, "error": "Chave vazia"}
+
+    field, env_key = _KEY_FIELDS[provider]
+    persist_env_setting(Path(config.project_root), env_key, key)
+    setattr(config, field, key)
+    logger.info("Chave de API de %s atualizada.", provider)  # sem o valor
+    return {"ok": True, "provider": provider}
+
+
 def set_pipeline_steps(
     config: Settings,
     *,

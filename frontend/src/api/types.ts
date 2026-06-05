@@ -7,7 +7,8 @@ export interface Watcher {
 export interface Llm {
   provider: string; label: string;
   anthropic_model: string; openai_model: string; gemini_model: string; ollama_model: string;
-  anthropic_key_set: boolean; valid_providers: string[];
+  anthropic_key_set: boolean; openai_key_set: boolean; gemini_key_set: boolean;
+  valid_providers: string[];
 }
 export interface MeetingSummary {
   id: string; title: string; created: string; duration: string;

@@ -67,6 +67,14 @@ export function useSetProvider() {
   });
 }
 
+export function useSetKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { provider: string; key: string }) => api.post("/api/llm/key", v),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["llm"] }),
+  });
+}
+
 export function useSetModel() {
   const qc = useQueryClient();
   return useMutation({
