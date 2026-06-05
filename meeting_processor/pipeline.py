@@ -147,6 +147,11 @@ class MeetingPipeline:
 
         # Etapa 3: Resumir (opcional)
         if steps["summary"]:
+            # Provedor local: garante o Ollama no ar antes de falar com ele.
+            if (self.config.llm_provider or "").lower() in ("local", "ollama"):
+                from .ollama_service import ensure_running
+
+                ensure_running(self.config)
             provider_label, model_label = self._llm_labels()
             logger.info("[3] Gerando resumo com %s...", provider_label)
             job.advance("summary", f"{provider_label}: {model_label}")
