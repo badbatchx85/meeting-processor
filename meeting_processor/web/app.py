@@ -1138,6 +1138,77 @@ def create_app(config: Settings | None = None) -> FastAPI:
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True, "queued": True, "meeting_id": meeting_id}
 
+    @app.post("/api/meetings/{meeting_id}/transcribe")
+    async def api_transcribe(meeting_id: str):
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+
+        def _run():
+            try:
+                from ..pipeline import MeetingPipeline
+
+                MeetingPipeline(config).transcribe_existing(meeting_id)
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha ao re-transcrever via API")
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "queued": True, "meeting_id": meeting_id}
+
+    @app.get("/api/meetings/{meeting_id}/log")
+    async def api_meeting_log(meeting_id: str):
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        from .. import generation_log
+
+        return generation_log.read(meeting_dir)
+
+    @app.get("/api/meetings/{meeting_id}/source")
+    async def api_meeting_source(meeting_id: str):
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        from ..pipeline import locate_source_file
+
+        src = locate_source_file(config, meeting_dir)
+        if src is None:
+            return {"exists": False, "name": "", "path": "", "size": None}
+        return {"exists": True, "name": src.name, "path": str(src), "size": src.stat().st_size}
+
+    @app.delete("/api/meetings/{meeting_id}/source")
+    async def api_delete_meeting_source(meeting_id: str):
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        from .. import generation_log
+        from ..pipeline import locate_source_file
+
+        started = datetime.now()
+        src = locate_source_file(config, meeting_dir)
+        if src is None:
+            generation_log.append(
+                meeting_dir, "delete_source", "error",
+                error=f"Arquivo de origem não encontrado: {meeting_dir.name}",
+                started=started, completed=datetime.now(),
+            )
+            return {"ok": True, "deleted": False}
+        try:
+            size_mb = src.stat().st_size / 1_048_576
+            src.unlink()
+        except OSError as e:
+            generation_log.append(
+                meeting_dir, "delete_source", "error", error=str(e),
+                started=started, completed=datetime.now(),
+            )
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        generation_log.append(
+            meeting_dir, "delete_source", "ok",
+            detail=f"{src.name} ({size_mb:.1f} MB)",
+            started=started, completed=datetime.now(),
+        )
+        return {"ok": True, "deleted": True}
+
     @app.get("/api/watcher")
     async def api_watcher():
         return supervisor.info()
@@ -1319,31 +1390,33 @@ def create_app(config: Settings | None = None) -> FastAPI:
                 status_code=400,
             )
 
+        mode = (payload or {}).get("mode", "full")
+
         def _run():
             try:
                 from ..pipeline import MeetingPipeline
 
-                MeetingPipeline(config).process(path)
+                MeetingPipeline(config).process(path, transcript_only=(mode == "transcript"))
             except Exception:  # noqa: BLE001
                 logger.exception("Falha ao processar via API")
 
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True, "queued": True, "file": str(path)}
 
-    def _process_path_async(path: Path) -> None:
+    def _process_path_async(path: Path, transcript_only: bool = False) -> None:
         """Dispara o pipeline para um arquivo em uma thread daemon."""
         def _run():
             try:
                 from ..pipeline import MeetingPipeline
 
-                MeetingPipeline(config).process(path)
+                MeetingPipeline(config).process(path, transcript_only=transcript_only)
             except Exception:  # noqa: BLE001
                 logger.exception("Falha ao processar arquivo enviado")
 
         threading.Thread(target=_run, daemon=True).start()
 
     @app.post("/api/process/upload")
-    async def api_process_upload(file: UploadFile = File(...)):
+    async def api_process_upload(file: UploadFile = File(...), mode: str = "full"):
         """Recebe um arquivo enviado pelo navegador, salva em ``uploads/`` e processa."""
         filename = Path(file.filename or "").name  # só o nome base — evita path traversal
         if not filename:
@@ -1373,7 +1446,7 @@ def create_app(config: Settings | None = None) -> FastAPI:
                 shutil.copyfileobj(file.file, out)
 
         await run_in_threadpool(_save)  # escrita em disco fora do event loop
-        _process_path_async(dest)
+        _process_path_async(dest, transcript_only=(mode == "transcript"))
         return {"ok": True, "queued": True, "file": dest.name}
 
     @app.post("/api/history/remove")
