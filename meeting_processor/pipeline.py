@@ -1,6 +1,7 @@
 """Orquestrador do pipeline de processamento de reuniões."""
 
 import logging
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,36 @@ from .utils import format_duration
 from .wiki_integrator import WikiIntegrator
 
 logger = logging.getLogger(__name__)
+
+_FOLDER_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}h\d{2} - (.+)$")
+
+
+def locate_source_file(config: Settings, meeting_dir: Path) -> Path | None:
+    """Encontra o arquivo de mídia que originou a transcrição da reunião.
+
+    O nome da pasta é ``"<data> <hora> - <stem-do-arquivo>"`` e o stem é sempre
+    igual ao do arquivo original (``NoteGenerator.prepare`` usa ``Path(src).stem``).
+    Procura em ``uploads/`` e no ``watch_dir`` por um arquivo com esse stem e uma
+    extensão suportada. Devolve o primeiro encontrado ou ``None``.
+    """
+    m = _FOLDER_PREFIX_RE.match(meeting_dir.name)
+    stem = m.group(1) if m else meeting_dir.name
+    exts = {e.lower() for e in config.watch_extensions}
+    roots = [Path(config.project_root) / "uploads", config.watch_path]
+    for root in roots:
+        try:
+            if not root.is_dir():
+                continue
+            for entry in root.iterdir():
+                if (
+                    entry.is_file()
+                    and entry.stem == stem
+                    and (not exts or entry.suffix.lower() in exts)
+                ):
+                    return entry
+        except OSError:
+            continue
+    return None
 
 
 class MeetingPipeline:
