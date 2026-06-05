@@ -153,6 +153,8 @@ sources:
 participants: {participants_yaml}
 source_file: "{source_file}"
 duration: "{duration}"
+meeting_type: "{summary.meeting_type}"
+purpose: "{summary.purpose}"
 ---"""
 
         body_parts = [
@@ -163,12 +165,22 @@ duration: "{duration}"
         # Info rápida + link para Tarefas
         participants_str = ", ".join(summary.participants) if summary.participants else "N/A"
         topics_str = ", ".join(summary.key_topics) if summary.key_topics else "N/A"
-        body_parts.extend([
+        quick_info = []
+        if summary.meeting_type:
+            quick_info.append(f"**Tipo:** {summary.meeting_type}  ")
+        quick_info.extend([
             f"**Participantes:** {participants_str}  ",
             f"**Topicos:** {topics_str}  ",
             f"**Tarefas:** {len(summary.action_items)} - [[{tarefas_link}|Tarefas]]",
             "",
         ])
+        body_parts.extend(quick_info)
+
+        if summary.purpose:
+            body_parts.extend([
+                "## Propósito\n",
+                f"{summary.purpose}\n",
+            ])
 
         # Resumo executivo
         body_parts.extend([
@@ -184,6 +196,13 @@ duration: "{duration}"
                 end = f"{tw.end_minutes:02d}:00"
                 body_parts.append(f"### {start} - {end}\n")
                 body_parts.append(f"{tw.summary}\n")
+
+        # Decisões
+        if summary.decisions:
+            body_parts.append("## Decisões\n")
+            for dec in summary.decisions:
+                body_parts.append(f"- {dec}")
+            body_parts.append("")
 
         # Tarefas identificadas
         body_parts.append("## Tarefas Identificadas\n")
@@ -206,6 +225,13 @@ duration: "{duration}"
         else:
             body_parts.append("Nenhuma tarefa identificada nesta reuniao.")
         body_parts.append("")
+
+        # Questões em aberto
+        if summary.open_questions:
+            body_parts.append("## Questões em Aberto\n")
+            for q in summary.open_questions:
+                body_parts.append(f"- {q}")
+            body_parts.append("")
 
         # Link para transcrição
         body_parts.append("## Transcricao Completa\n")

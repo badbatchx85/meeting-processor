@@ -51,3 +51,74 @@ def test_system_prompt_documents_new_fields():
     from meeting_processor.summarizer import SYSTEM_PROMPT
     for key in ("purpose", "meeting_type", "decisions", "open_questions"):
         assert key in SYSTEM_PROMPT
+
+
+def _summary_with_new_fields():
+    from meeting_processor.models import MeetingSummary
+    return MeetingSummary(
+        executive_summary="Resumo.",
+        time_windows=[],
+        action_items=[],
+        participants=["Ana"],
+        key_topics=["Roadmap"],
+        purpose="Alinhar o roadmap do trimestre",
+        meeting_type="planejamento",
+        decisions=["Adiar o lançamento para julho"],
+        open_questions=["Quem assume o suporte?"],
+    )
+
+
+def test_note_includes_new_frontmatter_and_sections(tmp_path):
+    from datetime import datetime
+    from meeting_processor.config import load_config
+    from meeting_processor.models import Transcript
+    from meeting_processor.note_generator import NoteGenerator
+
+    cfg = load_config()
+    cfg.project_root = str(tmp_path)
+    cfg.vault_dir = "vault"
+    transcript = Transcript(segments=[], full_text="", language="pt", duration=60.0)
+    gen = NoteGenerator(cfg)
+    note = gen._build_note(
+        title="2026-06-04 10h00 - reuniao",
+        summary=_summary_with_new_fields(),
+        transcript=transcript,
+        source_file="reuniao.mp4",
+        date_str="2026-06-04",
+        created_at=datetime(2026, 6, 4, 10, 0),
+    )
+    # frontmatter scalars
+    assert 'meeting_type: "planejamento"' in note
+    assert 'purpose: "Alinhar o roadmap do trimestre"' in note
+    # body sections
+    assert "## Propósito" in note
+    assert "## Decisões" in note
+    assert "- Adiar o lançamento para julho" in note
+    assert "## Questões em Aberto" in note
+    assert "- Quem assume o suporte?" in note
+    assert "**Tipo:** planejamento" in note
+
+
+def test_note_omits_empty_new_sections(tmp_path):
+    from datetime import datetime
+    from meeting_processor.config import load_config
+    from meeting_processor.models import MeetingSummary, Transcript
+    from meeting_processor.note_generator import NoteGenerator
+
+    cfg = load_config()
+    cfg.project_root = str(tmp_path)
+    cfg.vault_dir = "vault"
+    summary = MeetingSummary(
+        executive_summary="x", time_windows=[], action_items=[],
+        participants=[], key_topics=[],
+    )
+    gen = NoteGenerator(cfg)
+    note = gen._build_note(
+        title="t", summary=summary,
+        transcript=Transcript(segments=[], full_text="", language="pt", duration=1.0),
+        source_file="x.mp4", date_str="2026-06-04",
+        created_at=datetime(2026, 6, 4, 10, 0),
+    )
+    assert "## Propósito" not in note
+    assert "## Decisões" not in note
+    assert "## Questões em Aberto" not in note
