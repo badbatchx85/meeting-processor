@@ -17,6 +17,11 @@ meeting:
    `Erro ao processar resumo da reunião` note) can be retried.
 3. **Apenas transcrição (novo arquivo)** — on the Dashboard, transcribe a freshly
    uploaded / pointed file **without** the summary step.
+4. **Apagar arquivo de origem** — delete the original media file (video/audio)
+   that produced the transcript, to reclaim disk once the transcript is good. The
+   transcript/summary in the vault are **kept**; only the source file on disk is
+   removed. After deletion re-transcription is no longer possible, so the UI
+   disables "Gerar transcrição" and shows the source as unavailable.
 
 Every run is recorded in a **dedicated per-meeting generation log** shown on the
 meeting detail page: did it run OK, and if not, *why*. Runs happen in the
@@ -64,7 +69,7 @@ a crash.
 ]
 ```
 
-- `action`: `"transcript"` | `"summary"`.
+- `action`: `"transcript"` | `"summary"` | `"delete_source"`.
 - `status`: `"ok"` | `"error"`.
 - `error`: human-readable reason when `status == "error"`, else `null`.
 - `detail`: short success blurb (segment count, duration) when OK.
@@ -121,6 +126,23 @@ a crash.
    - `GET /api/meetings/{meeting_id}/log` — return
      `generation_log.read(meeting_dir)`; `404` if the meeting dir is missing,
      `[]` if there is simply no log yet.
+   - `GET /api/meetings/{meeting_id}/source` — locate the source via the same
+     `_locate_source_file` logic and return
+     `{ "exists": bool, "name": str, "path": str, "size": int | null }`
+     (`name`/`path`/`size` empty/`null` when not found). `404` if the meeting dir
+     is missing. The frontend uses `exists` to enable/disable re-transcribe and
+     the delete button.
+   - `DELETE /api/meetings/{meeting_id}/source` — locate and delete the source
+     file from disk. The vault meeting (transcript/summary) is **not** touched.
+     On success: append a `delete_source` **ok** log entry
+     (`detail = "<arquivo> (12.4 MB)"`) and return `{ "ok": true, "deleted": true }`.
+     If no source is found: append a `delete_source` **error** entry
+     (`"Arquivo de origem não encontrado: <name>"`) and return
+     `{ "ok": true, "deleted": false }` (idempotent — nothing to delete is not a
+     hard error). On an `OSError` while deleting: append an **error** entry with
+     `str(e)` and return `{ "ok": false, "error": … }` with `500`. Restricts
+     deletion to files under `uploads/` or `watch_dir` (defense: never delete an
+     arbitrary path).
    - `POST /api/process` — accept optional `"mode"` in the payload. When
      `mode == "transcript"`, run the pipeline with summary/note/kanban/wiki
      forced off for **this file only** (pass an override into `process`, or call a
@@ -133,9 +155,10 @@ a crash.
 
 ## Frontend changes
 
-5. **`api/types.ts`** — add `GenerationLogEntry { action: "transcript" | "summary";
-   status: "ok" | "error"; error: string | null; detail: string; started: string;
-   completed: string | null }`.
+5. **`api/types.ts`** — add `GenerationLogEntry { action: "transcript" | "summary"
+   | "delete_source"; status: "ok" | "error"; error: string | null; detail:
+   string; started: string; completed: string | null }` and
+   `SourceInfo { exists: boolean; name: string; path: string; size: number | null }`.
 
 6. **`hooks/useApi.ts`**
    - `useTranscribeMeeting()` — POST `/api/meetings/{id}/transcribe`; on success
@@ -146,13 +169,25 @@ a crash.
      poll at 4s when the detail page is open).
    - `useProcessFile()` — extend to accept `{ file, mode }` so the Dashboard can
      pass `mode: "transcript"`.
+   - `useMeetingSource(id)` — GET `/api/meetings/{id}/source` (query key
+     `["meeting-source", id]`).
+   - `useDeleteMeetingSource()` — DELETE `/api/meetings/{id}/source`; on success
+     invalidate `["meeting-source", id]` and `["meeting-log", id]`.
 
 7. **`pages/MeetingDetail.tsx`**
    - Header actions row: add **"Gerar transcrição"** and **"Gerar resumo"**
      buttons beside *Markdown / Word / Abrir no Obsidian*. Both always render
      (resumo is no longer gated on empty `resumo_md`). Disable while their
      mutation is pending; toast on trigger ("Gerando transcrição — acompanhe
-     abaixo.").
+     abaixo."). **"Gerar transcrição"** is also disabled when
+     `useMeetingSource(id)` reports `exists: false`, with a tooltip explaining the
+     source file is gone.
+   - **"Arquivo de origem"** line (near the header): shows the source name + size
+     from `useMeetingSource(id)`, or *"indisponível"* when missing. When present,
+     an **"Apagar arquivo de origem"** button opens a `ConfirmDialog`
+     ("Apagar o arquivo de origem? A transcrição e o resumo são mantidos, mas não
+     será possível gerar a transcrição novamente.") → `useDeleteMeetingSource`.
+     Toast on result; the log panel and source line refresh on success.
    - New **"Log de geração"** panel (below the tabs or as a small section under
      the header): renders `useGenerationLog(id)` entries — ✅/❌ icon, action
      label (`Transcrição` / `Resumo`), `detail` on success, `error` on failure,
@@ -193,6 +228,12 @@ exceptions (the raw `str(e)`, e.g. provider 429).
 - `POST /api/meetings/{id}/transcribe`: 404 for a missing meeting; 200 `queued`
   for an existing one (pipeline monkeypatched).
 - `GET /api/meetings/{id}/log`: returns appended entries; `[]` when none.
+- `GET /api/meetings/{id}/source`: `exists: true` + size when a matching file is
+  in `uploads/`; `exists: false` when absent; `404` for a missing meeting.
+- `DELETE /api/meetings/{id}/source`: with a file in `uploads/` → removes it from
+  disk, leaves the meeting folder intact, appends a `delete_source` ok entry; with
+  no source → `deleted: false` + a `delete_source` error entry; refuses a path
+  outside `uploads/`/`watch_dir`.
 - `POST /api/process` with `mode: "transcript"` runs the pipeline with the
   summary suppressed (pipeline monkeypatched to assert the flag).
 
@@ -200,7 +241,9 @@ exceptions (the raw `str(e)`, e.g. provider 429).
 - MeetingDetail: both "Gerar transcrição" and "Gerar resumo" buttons render even
   when `resumo_md` is non-empty; clicking each POSTs to the right endpoint; the
   "Log de geração" panel renders entries from a mocked `/log` response (ok + error
-  rows show detail vs. reason).
+  rows show detail vs. reason). With `source.exists: false`, "Gerar transcrição"
+  is disabled and the source line shows "indisponível"; with `exists: true`, the
+  "Apagar arquivo de origem" button opens the confirm and DELETEs on confirm.
 - Meetings: per-row re-transcribe / re-summarize buttons render and POST to the
   right endpoints.
 - Dashboard: checking "Apenas transcrição" makes the process call include
