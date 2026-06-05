@@ -42,7 +42,15 @@ export function Meetings() {
           <tbody className="divide-y divide-slate-100">
             {items.map((m) => (
               <tr key={m.id} className="hover:bg-slate-50">
-                <td className="py-2"><Link to={`/meetings/${encodeURIComponent(m.id)}`} className="font-medium hover:text-brand">{m.title}</Link></td>
+                <td className="py-2">
+                  <div className="flex items-center gap-2">
+                    <Link to={`/meetings/${encodeURIComponent(m.id)}`} className="font-medium hover:text-brand">{m.title}</Link>
+                    {m.meeting_type && (
+                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">{m.meeting_type}</span>
+                    )}
+                  </div>
+                  {m.purpose && <p className="text-xs text-slate-400">{m.purpose}</p>}
+                </td>
                 <td className="text-slate-500">{m.created || "—"}</td>
                 <td className="text-slate-500">{m.duration || "—"}</td>
                 <td className="text-slate-500">{m.task_count}</td>
