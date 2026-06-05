@@ -129,6 +129,8 @@ def _list_meetings(vault_path: Path) -> list[dict[str, Any]]:
                 "task_count": task_count,
                 "participants": meta.get("participants", ""),
                 "source_file": meta.get("source_file", ""),
+                "meeting_type": meta.get("meeting_type", ""),
+                "purpose": meta.get("purpose", ""),
             }
         )
     return meetings
