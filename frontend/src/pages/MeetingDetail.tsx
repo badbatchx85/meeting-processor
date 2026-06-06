@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { Sparkles, FileText, Trash2 } from "lucide-react";
+import { Sparkles, FileText, Trash2, Download, FileType, ExternalLink } from "lucide-react";
 import { Card } from "../components/Card";
 import { MarkdownView } from "../components/MarkdownView";
 import { GenerationLog } from "../components/GenerationLog";
@@ -25,8 +25,10 @@ function formatBytes(n: number | null): string {
 
 const chip =
   "inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-ink hover:bg-ink hover:text-paper disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink";
-const exportLink =
-  "font-mono text-[11px] uppercase tracking-label text-muted transition-colors hover:text-ink";
+// Export actions share the chip shape but read as a quieter "secondary" group:
+// muted text/border at rest, inverting to ink on hover like the primary chips.
+const exportChip =
+  "inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium text-muted transition-colors hover:border-ink hover:bg-ink hover:text-paper";
 
 export function MeetingDetail() {
   const { id = "" } = useParams();
@@ -101,9 +103,15 @@ export function MeetingDetail() {
             <Sparkles size={14} /> {summarize.isPending ? "Enviando…" : "Gerar resumo"}
           </button>
           <span className="mx-1 h-5 w-px bg-line" />
-          <a href={`/api/meetings/${enc}/export.md`} className={exportLink}>Markdown</a>
-          <a href={`/api/meetings/${enc}/export.docx`} className={exportLink}>Word</a>
-          <a href={obsidianUri} className={exportLink}>Abrir no Obsidian</a>
+          <a href={`/api/meetings/${enc}/export.md`} className={exportChip}>
+            <Download size={14} /> Markdown
+          </a>
+          <a href={`/api/meetings/${enc}/export.docx`} className={exportChip}>
+            <FileType size={14} /> Word
+          </a>
+          <a href={obsidianUri} className={exportChip}>
+            <ExternalLink size={14} /> Abrir no Obsidian
+          </a>
         </div>
 
         {/* Source line */}
