@@ -7,8 +7,10 @@
     "frontendDist": "../ui"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "Meeting Processor",
         "width": 1200,
         "height": 860,
