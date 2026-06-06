@@ -24,3 +24,11 @@ def test_no_env_falls_back_to_package_root(tmp_path, monkeypatch):
     # Default: two levels up from meeting_processor/config.py == repo root.
     expected = Path(__file__).resolve().parent.parent
     assert Path(cfg.project_root) == expected
+
+
+def test_relative_data_dir_is_resolved_to_absolute(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MEETING_DATA_DIR", "./appsupport")
+    cfg = load_config()
+    assert Path(cfg.project_root).is_absolute()
+    assert Path(cfg.project_root) == (tmp_path / "appsupport").resolve()

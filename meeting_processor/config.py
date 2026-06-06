@@ -160,7 +160,7 @@ def load_config(config_path: str | None = None) -> Settings:
     # o comportamento atual: dois níveis acima de config.py (raiz do repo).
     data_dir_env = os.environ.get("MEETING_DATA_DIR")
     project_root = (
-        Path(data_dir_env).expanduser()
+        Path(data_dir_env).expanduser().resolve()
         if data_dir_env
         else Path(__file__).parent.parent
     )
