@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Meeting Processor",
+  "version": "1.0.0",
+  "identifier": "com.meetingprocessor.desktop",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Meeting Processor",
+        "width": 1200,
+        "height": 860,
+        "minWidth": 900,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.icns"],
+    "resources": {
+      "resources/*": "./"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}
