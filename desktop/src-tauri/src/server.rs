@@ -26,16 +26,32 @@ pub async fn start_server(
     let python = paths::venv_python(&app)?;
     let port = free_port().map_err(|e| format!("porta livre: {e}"))?;
 
+    let log_path = data.join("desktop.log");
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|e| format!("abrir desktop.log: {e}"))?;
+    let log_err = log.try_clone().map_err(|e| format!("clonar log: {e}"))?;
+
     emit_log(&app, &format!("Iniciando servidor na porta {port}…"));
 
     let child = Command::new(&python)
         .args(["-m", "meeting_processor", "web", "--port", &port.to_string()])
         .env("MEETING_DATA_DIR", &data)
         // The bundled meeting_processor package lives in resources/; put it on the path.
-        .env("PYTHONPATH", &resources)
+        .env(
+            "PYTHONPATH",
+            match std::env::var("PYTHONPATH") {
+                Ok(existing) if !existing.is_empty() => {
+                    format!("{}:{}", resources.display(), existing)
+                }
+                _ => resources.display().to_string(),
+            },
+        )
         .current_dir(&data)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(log_err))
         .spawn()
         .map_err(|e| format!("falha ao iniciar o servidor: {e}"))?;
 

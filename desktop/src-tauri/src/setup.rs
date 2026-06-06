@@ -62,26 +62,29 @@ async fn run_streamed(app: &AppHandle, program: &str, args: &[&str]) -> Result<(
         .spawn()
         .map_err(|e| format!("falha ao iniciar {program}: {e}"))?;
 
-    if let Some(out) = child.stdout.take() {
+    let out_task = child.stdout.take().map(|out| {
         let app2 = app.clone();
-        let mut lines = BufReader::new(out).lines();
         tokio::spawn(async move {
+            let mut lines = BufReader::new(out).lines();
             while let Ok(Some(l)) = lines.next_line().await {
                 emit_log(&app2, &l);
             }
-        });
-    }
-    if let Some(err) = child.stderr.take() {
+        })
+    });
+    let err_task = child.stderr.take().map(|err| {
         let app2 = app.clone();
-        let mut lines = BufReader::new(err).lines();
         tokio::spawn(async move {
+            let mut lines = BufReader::new(err).lines();
             while let Ok(Some(l)) = lines.next_line().await {
                 emit_log(&app2, &l);
             }
-        });
-    }
+        })
+    });
 
     let status = child.wait().await.map_err(|e| e.to_string())?;
+    if let Some(t) = out_task { let _ = t.await; }
+    if let Some(t) = err_task { let _ = t.await; }
+
     if status.success() {
         Ok(())
     } else {
