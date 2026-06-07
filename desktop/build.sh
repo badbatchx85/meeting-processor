@@ -23,7 +23,7 @@ cp "$ROOT/requirements.txt" "$RES/requirements.txt"
 [ -f "$RES/config.default.yaml" ] || cp "$ROOT/config.yaml" "$RES/config.default.yaml"
 
 echo "==> 3/4 tauri build"
-( cd "$DESKTOP/src-tauri" && npx --yes @tauri-apps/cli build )
+( cd "$DESKTOP/src-tauri" && npx --yes @tauri-apps/cli@^2 build )
 
 APP="$DESKTOP/src-tauri/target/release/bundle/macos/Meeting Processor.app"
 echo "==> 4/4 Ad-hoc codesign"
