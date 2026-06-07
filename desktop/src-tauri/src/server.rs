@@ -58,6 +58,9 @@ pub async fn start_server(
     let child = Command::new(&python)
         .args(["-m", "meeting_processor", "web", "--port", &port.to_string()])
         .env("MEETING_DATA_DIR", &data)
+        // A Finder-launched .app has a minimal PATH; the server shells out to
+        // ffmpeg for audio extraction, so include the Homebrew bins.
+        .env("PATH", paths::shell_path())
         // The bundled meeting_processor package lives in resources/; prepend it
         // to any existing PYTHONPATH so `import meeting_processor` resolves.
         .env(

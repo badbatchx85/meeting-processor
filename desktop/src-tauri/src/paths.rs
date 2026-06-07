@@ -26,3 +26,24 @@ pub fn resource_dir(app: &AppHandle) -> Result<PathBuf, String> {
 pub fn venv_python(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir(app)?.join(".venv").join("bin").join("python"))
 }
+
+/// A PATH that includes the Homebrew bins.
+///
+/// A Finder-launched `.app` inherits only a minimal PATH (`/usr/bin:/bin:…`)
+/// without `/opt/homebrew/bin`, so bare `python3.11` / `ffmpeg` invocations
+/// (and the server's own `ffmpeg` calls for audio extraction) fail to resolve.
+/// We prepend the Homebrew bin dirs (incl. the keg-only python@3.11 bin) for
+/// both Apple Silicon and Intel layouts to every process we spawn.
+pub fn shell_path() -> String {
+    let brew_dirs = [
+        "/opt/homebrew/bin",
+        "/opt/homebrew/opt/python@3.11/bin",
+        "/usr/local/bin",
+        "/usr/local/opt/python@3.11/bin",
+    ];
+    let prefix = brew_dirs.join(":");
+    match std::env::var("PATH") {
+        Ok(existing) if !existing.is_empty() => format!("{prefix}:{existing}"),
+        _ => prefix,
+    }
+}

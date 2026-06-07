@@ -14,7 +14,12 @@ fn emit_log(app: &AppHandle, line: &str) {
 }
 
 async fn capture(cmd: &str, args: &[&str]) -> (String, String) {
-    match Command::new(cmd).args(args).output().await {
+    match Command::new(cmd)
+        .args(args)
+        .env("PATH", paths::shell_path())
+        .output()
+        .await
+    {
         Ok(out) => (
             String::from_utf8_lossy(&out.stdout).to_string(),
             String::from_utf8_lossy(&out.stderr).to_string(),
@@ -57,6 +62,7 @@ async fn run_streamed(app: &AppHandle, program: &str, args: &[&str]) -> Result<(
     emit_log(app, &format!("$ {program} {}", args.join(" ")));
     let mut child = Command::new(program)
         .args(args)
+        .env("PATH", paths::shell_path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
