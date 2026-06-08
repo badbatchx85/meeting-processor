@@ -1,6 +1,7 @@
 //! Spawn and supervise the Python web server. Holds the child handle so the
 //! app can kill it on quit (no orphan servers).
 use crate::paths;
+use crate::platform;
 use crate::port::free_port;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -37,8 +38,8 @@ pub async fn start_server(
     state: tauri::State<'_, ServerProcess>,
 ) -> Result<String, String> {
     let data = paths::data_dir(&app)?;
-    let resources = paths::resource_dir(&app)?;
-    let python = paths::venv_python(&app)?;
+    let resources = platform::package_dir(&app)?;
+    let python = platform::python(&app)?;
 
     // Reap any server left over from a previous (failed) attempt before spawning
     // a new one — otherwise retries would stack orphaned python processes.
@@ -60,7 +61,7 @@ pub async fn start_server(
         .env("MEETING_DATA_DIR", &data)
         // A Finder-launched .app has a minimal PATH; the server shells out to
         // ffmpeg for audio extraction, so include the Homebrew bins.
-        .env("PATH", paths::shell_path())
+        .env("PATH", platform::extra_path())
         // The bundled meeting_processor package lives in resources/; prepend it
         // to any existing PYTHONPATH so `import meeting_processor` resolves.
         .env(

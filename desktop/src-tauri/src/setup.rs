@@ -1,6 +1,7 @@
 //! Tauri commands for first-run setup. Each long-running command streams
 //! stdout/stderr lines to the webview via the `setup://log` event.
 use crate::paths;
+use crate::platform;
 use crate::prereq::{parse_brew_version, parse_ffmpeg_version, parse_python_version, Prerequisites, Status};
 use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
@@ -16,7 +17,7 @@ fn emit_log(app: &AppHandle, line: &str) {
 async fn capture(cmd: &str, args: &[&str]) -> (String, String) {
     match Command::new(cmd)
         .args(args)
-        .env("PATH", paths::shell_path())
+        .env("PATH", platform::extra_path())
         .output()
         .await
     {
@@ -38,6 +39,16 @@ fn brew_path() -> &'static str {
 
 #[tauri::command]
 pub async fn check_prerequisites(app: AppHandle) -> Result<Prerequisites, String> {
+    // Non-macOS (Linux AppImage) ships everything bundled — nothing to detect.
+    if !platform::needs_bootstrap() {
+        return Ok(Prerequisites {
+            brew: Status::Ok,
+            python311: Status::Ok,
+            ffmpeg: Status::Ok,
+            venv: Status::Ok,
+        });
+    }
+
     let (brew_out, _) = capture(brew_path(), &["--version"]).await;
     let (py_out, py_err) = capture("python3.11", &["--version"]).await;
     let (ff_out, _) = capture("ffmpeg", &["-version"]).await;
@@ -62,7 +73,7 @@ async fn run_streamed(app: &AppHandle, program: &str, args: &[&str]) -> Result<(
     emit_log(app, &format!("$ {program} {}", args.join(" ")));
     let mut child = Command::new(program)
         .args(args)
-        .env("PATH", paths::shell_path())
+        .env("PATH", platform::extra_path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

@@ -34,6 +34,7 @@ pub fn venv_python(app: &AppHandle) -> Result<PathBuf, String> {
 /// (and the server's own `ffmpeg` calls for audio extraction) fail to resolve.
 /// We prepend the Homebrew bin dirs (incl. the keg-only python@3.11 bin) for
 /// both Apple Silicon and Intel layouts to every process we spawn.
+#[cfg(target_os = "macos")]
 pub fn shell_path() -> String {
     let brew_dirs = [
         "/opt/homebrew/bin",
