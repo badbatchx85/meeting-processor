@@ -1,5 +1,6 @@
 //! Library crate root: module declarations + the Tauri application entrypoint.
 pub mod paths;
+pub mod platform;
 pub mod port;
 pub mod prereq;
 pub mod server;
