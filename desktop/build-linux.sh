@@ -36,15 +36,19 @@ mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/lib" "$WORK/tools"
 echo "==> 4/7 Bundling relocatable Python 3.11 + CPU deps"
 curl -fsSL "$PY_URL" | tar -xz -C "$APPDIR/usr"   # extracts to $APPDIR/usr/python
 PY="$APPDIR/usr/python/bin/python3.11"
-"$PY" -m pip install --upgrade pip
 # CPU-only torch FIRST so the heavy CUDA wheel is never pulled; then the rest
-# (requirements.txt's torch constraint is already satisfied).
+# (requirements.txt's torch constraint is already satisfied). The bundled pip
+# from python-build-standalone is recent enough; we don't upgrade it.
 "$PY" -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 "$PY" -m pip install -r "$ROOT/requirements.txt"
 
 echo "==> 5/7 Bundling static ffmpeg + payload"
-curl -fsSL "$FFMPEG_URL" | tar -xJ -C "$WORK/tools"
-cp "$WORK"/tools/ffmpeg-*-amd64-static/ffmpeg "$APPDIR/usr/bin/ffmpeg"
+curl -fsSL -o "$WORK/tools/ffmpeg.tar.xz" "$FFMPEG_URL"
+tar -xJf "$WORK/tools/ffmpeg.tar.xz" -C "$WORK/tools"
+ffmpeg_dir=( "$WORK"/tools/ffmpeg-*-amd64-static )
+[[ ${#ffmpeg_dir[@]} -eq 1 && -d "${ffmpeg_dir[0]}" ]] \
+  || { echo "ERROR: unexpected ffmpeg extract dir: ${ffmpeg_dir[*]}"; exit 1; }
+cp "${ffmpeg_dir[0]}/ffmpeg" "$APPDIR/usr/bin/ffmpeg"
 rsync -a --delete --exclude '__pycache__' --exclude '*.pyc' \
   "$ROOT/meeting_processor/" "$APPDIR/usr/lib/meeting_processor/"
 cp "$DESKTOP/src-tauri/resources/config.default.yaml" "$APPDIR/usr/lib/config.default.yaml"
@@ -62,6 +66,9 @@ done
 echo "==> 7/7 Packaging AppImage"
 # Python lives under usr/python (NOT usr/bin), so linuxdeploy only deploys deps
 # for the Tauri binary (WebKitGTK etc.) and leaves the bundled interpreter alone.
+# APPIMAGE_EXTRACT_AND_RUN lets the linuxdeploy AppImages run without FUSE
+# (GitHub Actions containers lack it).
+export APPIMAGE_EXTRACT_AND_RUN=1
 cd "$WORK"
 OUTPUT="Meeting_Processor-x86_64.AppImage" \
 "$WORK/tools/linuxdeploy-x86_64.AppImage" \
