@@ -154,7 +154,17 @@ class Settings(BaseModel):
 
 def load_config(config_path: str | None = None) -> Settings:
     """Carrega configuração do YAML e variáveis de ambiente."""
-    project_root = Path(__file__).parent.parent
+    # MEETING_DATA_DIR redireciona TODOS os caminhos graváveis (vault, temp,
+    # uploads, .env, config.yaml) para um diretório único — usado pelo app
+    # desktop (Tauri), cujo bundle é somente-leitura. Sem a variável, mantém
+    # o comportamento atual: dois níveis acima de config.py (raiz do repo).
+    data_dir_env = os.environ.get("MEETING_DATA_DIR")
+    project_root = (
+        Path(data_dir_env).expanduser().resolve()
+        if data_dir_env
+        else Path(__file__).parent.parent
+    )
+    project_root.mkdir(parents=True, exist_ok=True)
     load_dotenv(project_root / ".env")
 
     if config_path is None:

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useDroppable, useDraggable } from "@dnd-kit/core";
 import { Download } from "lucide-react";
-import { Card } from "../components/Card";
+import { PageHeader } from "../components/PageHeader";
 import { useTasks, useMoveTask } from "../hooks/useApi";
 import { useToast } from "../components/Toast";
 import type { Task } from "../api/types";
@@ -15,9 +15,9 @@ function TaskCard({ task }: { task: Task }) {
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
-      className="cursor-grab rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm active:cursor-grabbing">
-      <p className="font-medium text-slate-700">{task.description}</p>
-      {task.assignee && <p className="mt-1 text-xs text-slate-400">{task.assignee}</p>}
+      className="cursor-grab rounded-lg border border-line bg-white p-3 text-sm shadow-sm active:cursor-grabbing">
+      <p className="font-medium text-ink-soft">{task.description}</p>
+      {task.assignee && <p className="mt-1 text-xs text-muted-soft">{task.assignee}</p>}
     </div>
   );
 }
@@ -25,9 +25,10 @@ function TaskCard({ task }: { task: Task }) {
 function Column({ name, tasks }: { name: string; tasks: Task[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: name });
   return (
-    <div ref={setNodeRef} className={`flex-1 rounded-xl p-3 ${isOver ? "bg-brand/10" : "bg-slate-100"}`}>
-      <h3 className="mb-3 flex items-center justify-between text-sm font-semibold text-slate-600">
-        {name} <span className="rounded-full bg-white px-2 text-xs text-slate-400">{tasks.length}</span>
+    <div ref={setNodeRef} className={`flex-1 rounded-card border p-3 transition-colors ${isOver ? "border-ink bg-line" : "border-line bg-line-soft/60"}`}>
+      <h3 className="mb-3 flex items-center justify-between">
+        <span className="eyebrow">{name}</span>
+        <span className="rounded-full bg-surface px-2 py-0.5 font-mono text-[11px] tabular-nums text-muted-soft ring-1 ring-line">{tasks.length}</span>
       </h3>
       <div className="flex flex-col gap-2">
         {tasks.map((t) => <TaskCard key={t.task_id} task={t} />)}
@@ -68,21 +69,28 @@ export function Tasks() {
   };
 
   return (
-    <Card title="Tarefas (Kanban)" actions={
-      <div className="flex gap-1 text-xs">
-        {["csv", "json", "md", "txt"].map((ext) => (
-          <a key={ext} href={`/api/tasks/export.${ext}`}
-            className="flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-slate-600 hover:bg-slate-100">
-            <Download size={12} /> {ext.toUpperCase()}
-          </a>
-        ))}
-      </div>
-    }>
+    <div>
+      <PageHeader
+        index="03"
+        eyebrow="Quadro"
+        title="Tarefas"
+        description="Arraste as tarefas entre as colunas. As mudanças são salvas na hora."
+        actions={
+          <div className="flex gap-1">
+            {["csv", "json", "md", "txt"].map((ext) => (
+              <a key={ext} href={`/api/tasks/export.${ext}`}
+                className="flex items-center gap-1 rounded-md border border-line px-2 py-1 font-mono text-[11px] uppercase tracking-label text-muted transition-colors hover:border-ink hover:text-ink">
+                <Download size={12} /> {ext.toUpperCase()}
+              </a>
+            ))}
+          </div>
+        }
+      />
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="flex gap-4">
           {COLUMNS.map((c) => <Column key={c} name={c} tasks={byColumn[c] ?? []} />)}
         </div>
       </DndContext>
-    </Card>
+    </div>
   );
 }

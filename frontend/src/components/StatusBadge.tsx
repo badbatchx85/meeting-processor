@@ -1,8 +1,11 @@
 export function StatusBadge({ on, labelOn, labelOff }: { on: boolean; labelOn: string; labelOff: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-      on ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-      <span className={`h-2 w-2 rounded-full ${on ? "bg-emerald-500" : "bg-slate-400"}`} />
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-label ${
+        on ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-line bg-line-soft text-muted"
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${on ? "animate-pulse bg-emerald-500" : "bg-muted-soft"}`} />
       {on ? labelOn : labelOff}
     </span>
   );

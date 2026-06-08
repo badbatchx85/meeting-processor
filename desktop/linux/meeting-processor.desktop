@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Meeting Processor
+Exec=meeting-processor
+Icon=meeting-processor
+Categories=Utility;
+Terminal=false

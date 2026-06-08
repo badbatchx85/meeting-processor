@@ -15,9 +15,9 @@ function when(iso: string | null): string {
 export function GenerationLog({ entries }: { entries: GenerationLogEntry[] }) {
   // Defensive: a misbehaving/edge response could be non-array — never .map a non-array.
   if (!Array.isArray(entries) || entries.length === 0)
-    return <p className="text-sm text-slate-500">Nenhuma geração registrada ainda.</p>;
+    return <p className="text-sm text-muted">Nenhuma geração registrada ainda.</p>;
   return (
-    <ul className="divide-y divide-slate-100">
+    <ul className="divide-y divide-line-soft">
       {entries.map((e, i) => {
         const ok = e.status === "ok";
         return (
@@ -29,15 +29,15 @@ export function GenerationLog({ entries }: { entries: GenerationLogEntry[] }) {
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-slate-700">{ACTION_LABEL[e.action]}</span>
-                <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                  ok ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                <span className="font-medium text-ink-soft">{ACTION_LABEL[e.action]}</span>
+                <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-label ${
+                  ok ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-1 ring-rose-200"}`}>
                   {ok ? "OK" : "erro"}
                 </span>
               </div>
-              {ok && e.detail && <p className="truncate text-xs text-slate-500">{e.detail}</p>}
+              {ok && e.detail && <p className="truncate text-xs text-muted">{e.detail}</p>}
               {!ok && e.error && <p className="text-xs text-rose-600">{e.error}</p>}
-              <p className="text-xs text-slate-400">{when(e.completed || e.started)}</p>
+              <p className="font-mono text-[11px] text-muted-soft">{when(e.completed || e.started)}</p>
             </div>
           </li>
         );
