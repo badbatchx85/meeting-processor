@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { Sparkles, FileText, Trash2 } from "lucide-react";
+import { Sparkles, FileText, Trash2, Download, FileType, ExternalLink } from "lucide-react";
 import { Card } from "../components/Card";
 import { MarkdownView } from "../components/MarkdownView";
 import { GenerationLog } from "../components/GenerationLog";
@@ -23,6 +23,13 @@ function formatBytes(n: number | null): string {
   return `${v.toFixed(1)} ${units[i]}`;
 }
 
+const chip =
+  "inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-ink hover:bg-ink hover:text-paper disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink";
+// Export actions share the chip shape but read as a quieter "secondary" group:
+// muted text/border at rest, inverting to ink on hover like the primary chips.
+const exportChip =
+  "inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium text-muted transition-colors hover:border-ink hover:bg-ink hover:text-paper";
+
 export function MeetingDetail() {
   const { id = "" } = useParams();
   const meeting = useMeeting(id);
@@ -42,7 +49,7 @@ export function MeetingDetail() {
     { key: "transcript", label: "Transcrição" },
   ];
 
-  if (meeting.isLoading) return <p className="text-slate-500">Carregando…</p>;
+  if (meeting.isLoading) return <p className="text-muted">Carregando…</p>;
   if (meeting.isError || !meeting.data) return <p className="text-rose-600">Reunião não encontrada.</p>;
   const d = meeting.data;
   const enc = encodeURIComponent(id);
@@ -65,86 +72,114 @@ export function MeetingDetail() {
     });
 
   return (
-    <Card title={d.title} actions={
-      <div className="flex items-center gap-3 text-sm">
-        <button onClick={generateTranscript} disabled={transcribe.isPending || sourceGone}
-          title={sourceGone ? "Arquivo de origem indisponível" : ""}
-          className="flex items-center gap-1 text-brand hover:underline disabled:opacity-40 disabled:no-underline">
-          <FileText size={14} /> {transcribe.isPending ? "Enviando…" : "Gerar transcrição"}
-        </button>
-        <button onClick={generateSummary} disabled={summarize.isPending}
-          className="flex items-center gap-1 text-brand hover:underline disabled:opacity-40">
-          <Sparkles size={14} /> {summarize.isPending ? "Enviando…" : "Gerar resumo"}
-        </button>
-        <a href={`/api/meetings/${enc}/export.md`} className="text-brand hover:underline">Markdown</a>
-        <a href={`/api/meetings/${enc}/export.docx`} className="text-brand hover:underline">Word</a>
-        <a href={obsidianUri} className="text-brand hover:underline">Abrir no Obsidian</a>
-      </div>
-    }>
-      <div className="mb-3 flex items-center gap-3 text-xs text-slate-500">
-        <span className="font-medium text-slate-600">Arquivo de origem:</span>
-        {source.data?.exists ? (
-          <>
-            <span>{source.data.name} · {formatBytes(source.data.size)}</span>
-            <button onClick={() => setConfirmDelete(true)} disabled={deleteSource.isPending}
-              className="flex items-center gap-1 text-slate-400 hover:text-rose-600 disabled:opacity-40">
-              <Trash2 size={13} /> Apagar arquivo de origem
-            </button>
-          </>
-        ) : (
-          <span className="italic">indisponível</span>
-        )}
-      </div>
-
-      {(d.meta.purpose || d.meta.meeting_type) && (
-        <div className="mb-4 flex items-center gap-2">
+    <div className="flex flex-col gap-6">
+      {/* Editorial header */}
+      <header className="border-b border-line pb-6">
+        <div className="flex items-center gap-3">
+          <span className="index-num">▶</span>
+          <span className="eyebrow">Reunião</span>
           {d.meta.meeting_type && (
-            <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-brand">
+            <span className="rounded-full border border-line bg-line-soft px-2 py-0.5 text-[11px] font-medium text-ink-soft">
               {d.meta.meeting_type}
             </span>
           )}
-          {d.meta.purpose && <p className="text-sm text-slate-600">{d.meta.purpose}</p>}
         </div>
-      )}
-      <div className="mb-4 flex gap-1 border-b border-slate-200">
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-              tab === t.key ? "border-brand text-brand" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-            {t.label}
+        <h1 className="mt-3 break-words font-display text-2xl font-bold tracking-tightest text-ink md:text-[28px]">
+          {d.title}
+        </h1>
+        {d.meta.purpose && <p className="mt-2 max-w-2xl text-sm text-muted">{d.meta.purpose}</p>}
+
+        {/* Toolbar */}
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <button
+            onClick={generateTranscript}
+            disabled={transcribe.isPending || sourceGone}
+            title={sourceGone ? "Arquivo de origem indisponível" : ""}
+            className={chip}
+          >
+            <FileText size={14} /> {transcribe.isPending ? "Enviando…" : "Gerar transcrição"}
           </button>
-        ))}
-      </div>
+          <button onClick={generateSummary} disabled={summarize.isPending} className={chip}>
+            <Sparkles size={14} /> {summarize.isPending ? "Enviando…" : "Gerar resumo"}
+          </button>
+          <span className="mx-1 h-5 w-px bg-line" />
+          <a href={`/api/meetings/${enc}/export.md`} className={exportChip}>
+            <Download size={14} /> Markdown
+          </a>
+          <a href={`/api/meetings/${enc}/export.docx`} className={exportChip}>
+            <FileType size={14} /> Word
+          </a>
+          <a href={obsidianUri} className={exportChip}>
+            <ExternalLink size={14} /> Abrir no Obsidian
+          </a>
+        </div>
 
-      {tab === "summary" && (d.resumo_md.trim().length > 0 ? (
-        <MarkdownView>{d.resumo_md}</MarkdownView>
-      ) : (
-        <p className="py-6 text-sm text-slate-500">
-          Sem resumo ainda — use "Gerar resumo" acima.
-        </p>
-      ))}
-      {tab === "transcript" && <MarkdownView>{d.transcricao_md}</MarkdownView>}
-      {tab === "tasks" && (
-        <ul className="space-y-1">
-          {d.tasks.length === 0 && <li className="text-slate-500">Sem tarefas.</li>}
-          {d.tasks.map((t, i) => (
-            <li key={i} className="flex items-center gap-2">
-              <input type="checkbox" checked={t.done} readOnly />
-              <span className={t.done ? "text-slate-400 line-through" : ""}>{t.description}</span>
-            </li>
+        {/* Source line */}
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+          <span className="eyebrow">Arquivo de origem</span>
+          {source.data?.exists ? (
+            <>
+              <span className="font-mono text-[12px] text-ink-soft">
+                {source.data.name} · {formatBytes(source.data.size)}
+              </span>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                disabled={deleteSource.isPending}
+                className="inline-flex items-center gap-1 text-muted-soft transition-colors hover:text-rose-600 disabled:opacity-40"
+              >
+                <Trash2 size={13} /> Apagar arquivo de origem
+              </button>
+            </>
+          ) : (
+            <span className="font-mono text-[12px] italic text-muted-soft">indisponível</span>
+          )}
+        </div>
+      </header>
+
+      {/* Tabs + content */}
+      <Card>
+        <div className="-mt-1 mb-5 flex gap-6 border-b border-line">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`-mb-px border-b-2 pb-3 text-sm font-medium tracking-tight transition-colors ${
+                tab === t.key ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
           ))}
-        </ul>
-      )}
+        </div>
 
-      <div className="mt-6 border-t border-slate-100 pt-4">
-        <h3 className="mb-2 text-sm font-semibold text-slate-700">Log de geração</h3>
+        {tab === "summary" && (d.resumo_md.trim().length > 0 ? (
+          <MarkdownView>{d.resumo_md}</MarkdownView>
+        ) : (
+          <p className="py-6 text-sm text-muted">Sem resumo ainda — use "Gerar resumo" acima.</p>
+        ))}
+        {tab === "transcript" && <MarkdownView>{d.transcricao_md}</MarkdownView>}
+        {tab === "tasks" && (
+          <ul className="space-y-2">
+            {d.tasks.length === 0 && <li className="text-muted">Sem tarefas.</li>}
+            {d.tasks.map((t, i) => (
+              <li key={i} className="flex items-center gap-2.5 text-sm">
+                <input type="checkbox" checked={t.done} readOnly className="h-4 w-4 rounded border-line accent-ink" />
+                <span className={t.done ? "text-muted-soft line-through" : "text-ink-soft"}>{t.description}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {/* Generation log */}
+      <Card title="Log de geração" eyebrow="Auditoria" index="↻">
         <GenerationLog entries={log.data ?? []} />
-      </div>
+      </Card>
 
       <ConfirmDialog open={confirmDelete}
         title="Apagar o arquivo de origem? A transcrição e o resumo são mantidos, mas não será possível gerar a transcrição novamente."
         onConfirm={() => { setConfirmDelete(false); removeSource(); }}
         onCancel={() => setConfirmDelete(false)} />
-    </Card>
+    </div>
   );
 }

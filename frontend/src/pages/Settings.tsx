@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
+import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/Toast";
 import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus } from "../hooks/useApi";
 import { ApiError } from "../api/client";
@@ -111,25 +112,32 @@ export function Settings() {
     );
 
   return (
-    <div className="grid max-w-2xl gap-6">
-      <Card title="Provedor LLM">
+    <div>
+      <PageHeader
+        index="05"
+        eyebrow="Ajustes"
+        title="Configuração"
+        description="Provedor de IA, pasta monitorada e quais etapas rodar."
+      />
+      <div className="grid max-w-2xl gap-6">
+      <Card title="Provedor LLM" eyebrow="IA" index="A">
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-600">Provedor</span>
+            <span className="text-muted">Provedor</span>
             <select value={provider} disabled={!llm.data}
               onChange={(e) => setProvider.mutate(e.target.value, {
                 onSuccess: () => toast("ok", "Provedor atualizado."), onError })}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              className="rounded-lg border border-line px-3 py-2 text-sm">
               {(llm.data?.valid_providers ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </label>
 
           {(KEY_PROVIDERS as readonly string[]).includes(provider) && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="flex items-center gap-2 text-slate-600">
+              <span className="flex items-center gap-2 text-muted">
                 Chave de API
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  keyIsSet(llm.data, provider) ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                  keyIsSet(llm.data, provider) ? "bg-emerald-100 text-emerald-700" : "bg-line text-muted"}`}>
                   {keyIsSet(llm.data, provider) ? "✓ configurada" : "não configurada"}
                 </span>
               </span>
@@ -137,7 +145,7 @@ export function Settings() {
                 <input type="password" aria-label="Chave de API"
                   value={apiKey} onChange={(e) => setApiKey(e.target.value)}
                   placeholder={keyIsSet(llm.data, provider) ? "•••••••• (já configurada — cole para trocar)" : "cole a chave de API"}
-                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                  className="flex-1 rounded-lg border border-line px-3 py-2 text-sm" />
                 <button onClick={saveKey} disabled={setKey.isPending || !apiKey.trim()}
                   className="rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
                   Salvar chave
@@ -149,12 +157,12 @@ export function Settings() {
           {isLocal && (
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Modelo local (Ollama)</span>
+                <span className="text-muted">Modelo local (Ollama)</span>
                 <button onClick={() => localModels.refetch()}
                   className="text-xs text-brand hover:underline">Atualizar</button>
               </div>
               {localModels.isLoading ? (
-                <p className="text-slate-400">Consultando o Ollama…</p>
+                <p className="text-muted-soft">Consultando o Ollama…</p>
               ) : !localModels.data?.ollama_running ? (
                 <p className="text-amber-700">
                   Ollama não está rodando. Inicie com <code>ollama serve</code> ou instale em{" "}
@@ -168,7 +176,7 @@ export function Settings() {
                         if (e.target.value === CUSTOM) { setCustom(true); setModelValue(""); }
                         else { setCustom(false); setModelValue(e.target.value); }
                       }}
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                      className="flex-1 rounded-lg border border-line px-3 py-2 text-sm">
                       {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
                       <option value={CUSTOM}>Outro (personalizado)…</option>
                     </select>
@@ -180,29 +188,29 @@ export function Settings() {
                   {custom && (
                     <input value={model} onChange={(e) => setModelValue(e.target.value)}
                       placeholder="ex.: qwen2.5:7b"
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                      className="rounded-lg border border-line px-3 py-2 text-sm" />
                   )}
                 </>
               ) : (
                 <div className="flex flex-col gap-2">
                   {pullStatus.data?.model && !pullStatus.data.done && (
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs text-slate-600">
+                      <span className="text-xs text-muted">
                         Baixando {pullStatus.data.model} — {pullStatus.data.percent ?? 0}%
                         {pullStatus.data.status ? ` (${pullStatus.data.status})` : ""}
                       </span>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-line">
                         <div className="h-full bg-brand transition-all"
                           style={{ width: `${pullStatus.data.percent ?? 0}%` }} />
                       </div>
                     </div>
                   )}
-                  <p className="text-slate-500">Nenhum modelo instalado. Baixe um recomendado:</p>
+                  <p className="text-muted">Nenhum modelo instalado. Baixe um recomendado:</p>
                   {localModels.data.suggested.map((m) => (
                     <div key={m} className="flex items-center justify-between gap-2">
-                      <code className="text-xs text-slate-600">{m}</code>
+                      <code className="text-xs text-muted">{m}</code>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-400">ollama pull {m}</span>
+                        <span className="text-xs text-muted-soft">ollama pull {m}</span>
                         <button aria-label={`Baixar ${m}`} onClick={() => doPull(m)} disabled={pull.isPending}
                           className="rounded-lg bg-brand px-2.5 py-1 text-xs text-white hover:bg-brand-dark disabled:opacity-50">
                           Baixar
@@ -217,7 +225,7 @@ export function Settings() {
 
           {!isLocal && provider in MODEL_OPTIONS && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-600">Modelo</span>
+              <span className="text-muted">Modelo</span>
               <div className="flex gap-2">
                 <select aria-label="Modelo"
                   value={custom ? CUSTOM : model}
@@ -225,7 +233,7 @@ export function Settings() {
                     if (e.target.value === CUSTOM) { setCustom(true); setModelValue(""); }
                     else { setCustom(false); setModelValue(e.target.value); }
                   }}
-                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  className="flex-1 rounded-lg border border-line px-3 py-2 text-sm">
                   {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
                   <option value={CUSTOM}>Outro (personalizado)…</option>
                 </select>
@@ -237,24 +245,24 @@ export function Settings() {
               {custom && (
                 <input value={model} onChange={(e) => setModelValue(e.target.value)}
                   placeholder="id do modelo (ex.: gpt-4o, gemini-1.5-pro)"
-                  className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                  className="mt-1 rounded-lg border border-line px-3 py-2 text-sm" />
               )}
             </label>
           )}
         </div>
       </Card>
 
-      <Card title="Pasta monitorada">
+      <Card title="Pasta monitorada" eyebrow="Watcher" index="B">
         <div className="flex gap-2">
           <input value={watchDir} onChange={(e) => setWatchDirValue(e.target.value)}
-            placeholder="~/Videos/OBS" className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            placeholder="~/Videos/OBS" className="flex-1 rounded-lg border border-line px-3 py-2 text-sm" />
           <button onClick={() => setWatchDir.mutate(watchDir, {
             onSuccess: (r) => toast("ok", (r as { exists?: boolean })?.exists ? "Pasta salva." : "Salva (pasta ainda não existe)."), onError })}
             className="rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark">Salvar</button>
         </div>
       </Card>
 
-      <Card title="Etapas do processamento">
+      <Card title="Etapas do processamento" eyebrow="Pipeline" index="C">
         <div className="flex flex-col gap-2">
           {STEP_LABELS.map(({ key, label }) => (
             <label key={key} className="flex items-center gap-2 text-sm">
@@ -267,6 +275,7 @@ export function Settings() {
             className="mt-2 w-fit rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark">Salvar etapas</button>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

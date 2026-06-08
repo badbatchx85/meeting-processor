@@ -2,5 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light dark; }
-body { @apply bg-slate-50 text-slate-900 antialiased; }
+:root {
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-paper text-ink antialiased;
+    font-family: theme("fontFamily.sans");
+  }
+
+  h1, h2, h3 {
+    font-family: theme("fontFamily.display");
+    font-weight: 700;
+    letter-spacing: theme("letterSpacing.tightest");
+  }
+
+  ::selection {
+    background: #0a0a0a;
+    color: #fafaf9;
+  }
+
+  /* Thin, ink-toned scrollbars to match the editorial restraint. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #d6d3d1 transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb {
+    background: #d6d3d1;
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: #a8a29e; background-clip: content-box; }
+
+  /* Focus ring in ink, not browser blue. */
+  :focus-visible {
+    outline: 2px solid #0a0a0a;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Uppercase, mono, wide-tracked micro-label — the nuvark "01 SERVIÇOS" motif. */
+  .eyebrow {
+    @apply font-mono text-[11px] uppercase text-muted;
+    letter-spacing: theme("letterSpacing.label");
+  }
+  /* Monospace index numeral used beside section/nav labels. */
+  .index-num {
+    @apply font-mono text-[11px] text-muted-soft tabular-nums;
+  }
+}

@@ -1,0 +1,23 @@
+name: Lock Linux deps
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  lock:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate hash-pinned lockfile
+        run: ./desktop/lock-linux-deps.sh
+
+      - name: Upload lockfile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: requirements-linux-lock
+          path: desktop/requirements-linux.lock

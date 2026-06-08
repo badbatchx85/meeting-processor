@@ -21,7 +21,7 @@ export function ConversionHistory({
   const rows = limit ? entries.slice(0, limit) : entries;
 
   return (
-    <ul className="divide-y divide-slate-100">
+    <ul className="divide-y divide-line-soft">
       {rows.map((e) => {
         const ok = e.status === "completed";
         return (
@@ -33,16 +33,16 @@ export function ConversionHistory({
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-medium text-slate-700">{e.file}</span>
+                <span className="truncate font-mono text-[13px] text-ink-soft">{e.file}</span>
                 <span
-                  className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                    ok ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                  className={`ml-2 shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-label ${
+                    ok ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
                   }`}
                 >
                   {ok ? "OK" : "erro"}
                 </span>
               </div>
-              {ok && e.detail && <p className="truncate text-xs text-slate-500">{e.detail}</p>}
+              {ok && e.detail && <p className="truncate text-xs text-muted">{e.detail}</p>}
               {!ok && (
                 <p className="text-xs text-rose-600">
                   {e.failed_stage ? `${e.failed_stage}: ` : ""}
@@ -50,7 +50,7 @@ export function ConversionHistory({
                 </p>
               )}
               {(e.completed || e.started) && (
-                <p className="text-xs text-slate-400">{when(e.completed || e.started)}</p>
+                <p className="font-mono text-[11px] text-muted-soft">{when(e.completed || e.started)}</p>
               )}
             </div>
           </li>

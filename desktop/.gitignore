@@ -1,0 +1,5 @@
+src-tauri/target/
+src-tauri/gen/
+src-tauri/resources/meeting_processor/
+src-tauri/resources/requirements.txt
+*.dmg

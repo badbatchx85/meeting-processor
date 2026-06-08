@@ -1,0 +1,99 @@
+# Meeting Processor - Configuração
+# ================================
+
+# Caminhos
+# watch_dir: pasta onde o OBS salva as gravações.
+#   - Deixe em branco para detectar automaticamente ~/Videos/OBS (qualquer SO).
+#   - Pode ser definido pela interface web (Configuração) ou pela env MEETING_WATCH_DIR.
+#   - Aceita "~" para a home. Ex.: "~/Videos/OBS" ou "D:/Gravacoes".
+watch_dir: ""
+vault_dir: "./vault"
+
+# Monitoramento de arquivos
+watch_extensions:
+  - ".mkv"
+  - ".mp4"
+  - ".webm"
+file_stable_seconds: 10
+
+# Whisper (transcrição)
+# whisper_backend:
+#   "auto"   -> usa whisper.cpp se encontrado, senão openai-whisper (pip). Padrão.
+#   "openai" -> openai-whisper puro Python; baixa o modelo sozinho (mais simples)
+#   "cpp"    -> força whisper.cpp (mais rápido com GPU; requer binário + modelo .bin)
+whisper_backend: "auto"
+whisper_model: "large"
+whisper_language: "pt"
+whisper_device: "auto"
+whisper_initial_prompt: "Transcrição de reunião em português brasileiro."
+
+# ----------------------------------------------------------
+# Provedor de LLM (resumo da reunião)
+# ----------------------------------------------------------
+# Valores: "anthropic" (Claude), "openai" (OpenAI/compatíveis),
+#          "gemini" (Google), "local" (Ollama) ou "none" (sem IA: só transcreve).
+# Também alterável pela interface web. Env var: MEETING_LLM_PROVIDER.
+# As chaves de API ficam no .env (nunca no config.yaml).
+llm_provider: "anthropic"
+
+# Claude API — requer ANTHROPIC_API_KEY no .env
+anthropic_model: "claude-sonnet-4-20250514"
+
+# OpenAI e qualquer serviço compatível — requer OPENAI_API_KEY no .env.
+# Para usar outro serviço, troque openai_base_url:
+#   OpenRouter: https://openrouter.ai/api/v1   (modelo ex.: "openai/gpt-4o")
+#   Groq:       https://api.groq.com/openai/v1
+#   DeepSeek:   https://api.deepseek.com/v1     (modelo: "deepseek-chat")
+#   xAI/Grok:   https://api.x.ai/v1             (modelo: "grok-2-latest")
+openai_base_url: "https://api.openai.com/v1"
+openai_model: "gpt-4o"
+openai_request_timeout: 600.0
+
+# Google Gemini — requer GEMINI_API_KEY no .env
+gemini_base_url: "https://generativelanguage.googleapis.com"
+gemini_model: "gemini-2.0-flash"
+gemini_request_timeout: 600.0
+
+# Ollama (LLM local) — usado quando llm_provider == "local"
+# Requer Ollama instalado e o modelo baixado:
+#   ollama pull qwen2.5:14b
+# Veja docs/llm-local.md
+ollama_base_url: "http://localhost:11434"
+ollama_model: "qwen2.5:14b"
+ollama_temperature: 0.2
+ollama_num_ctx: 16384
+ollama_request_timeout: 600.0
+
+# Comum a todos os provedores
+summary_chunk_minutes: 5
+max_tokens_summary: 4096
+
+# Nota de reunião
+default_tags:
+  - meeting
+  - transcription
+  - source
+note_status: "mature"
+
+# Kanban
+kanban_file: "wiki/kanban-reunioes.md"
+kanban_columns:
+  todo: "A Fazer"
+  in_progress: "Em Progresso"
+  done: "Concluído"
+
+# ----------------------------------------------------------
+# Etapas do pipeline (áudio + transcrição rodam sempre)
+# ----------------------------------------------------------
+# Desligue o resumo para o modo "só transcrição".
+# Nota/Kanban/Wiki dependem do resumo. Também editável pela
+# interface web (Configuração > Etapas do processamento).
+enable_summary: true
+enable_note: true
+enable_kanban: true
+enable_wiki: true
+
+# Processamento
+temp_dir: ".tmp"
+cleanup_temp: true
+log_level: "INFO"
