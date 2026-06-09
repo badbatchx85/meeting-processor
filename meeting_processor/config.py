@@ -35,6 +35,9 @@ class Settings(BaseModel):
     #   "cpp"    -> força whisper.cpp (mais rápido com GPU)
     #   "openai" -> força openai-whisper (Python puro, baixa o modelo sozinho)
     whisper_backend: str = "auto"
+    # Adaptativo: escolhe o modelo Whisper pela duração do áudio (ver
+    # transcriber.select_whisper_model). Off => usa whisper_model fixo.
+    whisper_adaptive: bool = False
     # Caminhos do whisper.cpp. Vazio => detecta automaticamente no PATH
     # do sistema e em .whisper-cpp/ e .models/ dentro do projeto.
     whisper_cli_path: str = ""
@@ -233,6 +236,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_ENABLE_NOTE": "enable_note",
         "MEETING_ENABLE_KANBAN": "enable_kanban",
         "MEETING_ENABLE_WIKI": "enable_wiki",
+        "MEETING_WHISPER_ADAPTIVE": "whisper_adaptive",
     }
     for env_key, config_key in bool_overrides.items():
         env_val = os.environ.get(env_key)
