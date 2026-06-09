@@ -168,16 +168,23 @@ class _BaseSummarizer:
 
     # API pública -----------------------------------------------------------
 
+    def _build_user_prompt(
+        self, source_filename: str, duration: float, chunked_text: str
+    ) -> str:
+        return (
+            f"Arquivo de origem: {source_filename}\n"
+            f"Duração total: {format_duration(duration)}\n\n"
+            f"--- TRANSCRIÇÃO ---\n\n{chunked_text}"
+        )
+
     def summarize(self, transcript: Transcript, source_filename: str) -> MeetingSummary:
         chunked_text = self._build_chunked_transcript(
             transcript.segments,
             self.config.summary_chunk_minutes,
         )
 
-        user_prompt = (
-            f"Arquivo de origem: {source_filename}\n"
-            f"Duração total: {format_duration(transcript.duration)}\n\n"
-            f"--- TRANSCRIÇÃO ---\n\n{chunked_text}"
+        user_prompt = self._build_user_prompt(
+            source_filename, transcript.duration, chunked_text
         )
 
         system_prompt = SYSTEM_PROMPT.replace(
