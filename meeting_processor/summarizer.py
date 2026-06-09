@@ -83,6 +83,27 @@ Regras:
 - Tópicos principais devem ser 3-5 temas centrais discutidos.\
 """
 
+# Sentinela do resumo "falhou" — usada para detectar blocos que não puderam
+# ser resumidos no caminho map-reduce.
+_ERROR_SUMMARY = "Erro ao processar resumo da reunião."
+
+# System prompt do passo "reduce": combina resumos parciais em um só.
+REDUCE_SYSTEM_PROMPT = """\
+Você recebe vários resumos parciais de uma MESMA reunião, em ordem cronológica.
+Combine-os em um único resumo coerente em português brasileiro.
+
+Responda APENAS com JSON válido, sem markdown, sem blocos de código:
+
+{
+  "executive_summary": "Resumo executivo unificado de 3-5 frases cobrindo a reunião inteira",
+  "purpose": "Uma frase com o objetivo central da reunião, ou string vazia"
+}
+
+Regras:
+- Una as ideias dos trechos sem repetição; produza UM resumo executivo fluido.
+- Não invente informação que não esteja nos resumos parciais.\
+"""
+
 
 # ---------------------------------------------------------------------------
 # Interface
@@ -179,28 +200,33 @@ class _BaseSummarizer:
 
         return "\n".join(lines)
 
-    def _parse_response(self, response_text: str) -> MeetingSummary:
+    @staticmethod
+    def _extract_json(response_text: str) -> dict | None:
+        """Extrai um objeto JSON da resposta do LLM, ou ``None`` se não houver.
+
+        Tolera blocos de código markdown e texto antes/depois do JSON (modelos
+        locais às vezes adicionam preâmbulo).
+        """
         cleaned = response_text.strip()
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
-
-        # Modelos locais às vezes adicionam texto antes/depois do JSON.
-        # Se o JSON direto falhar, tenta extrair o primeiro objeto {...}.
         try:
-            data = json.loads(cleaned)
+            return json.loads(cleaned)
         except json.JSONDecodeError:
             match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-            if match:
-                try:
-                    data = json.loads(match.group(0))
-                except json.JSONDecodeError as e:
-                    logger.error("Resposta do LLM não é JSON válido: %s", e)
-                    logger.debug("Resposta bruta: %s", response_text[:500])
-                    return self._empty_summary()
-            else:
-                logger.error("Não foi possível extrair JSON da resposta do LLM.")
-                logger.debug("Resposta bruta: %s", response_text[:500])
-                return self._empty_summary()
+            if not match:
+                return None
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return None
+
+    def _parse_response(self, response_text: str) -> MeetingSummary:
+        data = self._extract_json(response_text)
+        if data is None:
+            logger.error("Não foi possível extrair JSON da resposta do LLM.")
+            logger.debug("Resposta bruta: %s", response_text[:500])
+            return self._empty_summary()
 
         return MeetingSummary(
             executive_summary=data.get("executive_summary", ""),
@@ -219,7 +245,7 @@ class _BaseSummarizer:
     @staticmethod
     def _empty_summary() -> MeetingSummary:
         return MeetingSummary(
-            executive_summary="Erro ao processar resumo da reunião.",
+            executive_summary=_ERROR_SUMMARY,
             time_windows=[],
             action_items=[],
             participants=[],
@@ -615,4 +641,5 @@ __all__ = [
     "OllamaSummarizer",
     "SummarizerProtocol",
     "SYSTEM_PROMPT",
+    "REDUCE_SYSTEM_PROMPT",
 ]
