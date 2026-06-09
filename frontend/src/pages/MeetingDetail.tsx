@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Sparkles, FileText, Trash2, Download, FileType, ExternalLink } from "lucide-react";
 import { Card } from "../components/Card";
@@ -8,9 +8,11 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
 import {
   useMeeting, useSummarizeMeeting, useTranscribeMeeting,
-  useGenerationLog, useMeetingSource, useDeleteMeetingSource,
+  useGenerationLog, useMeetingSource, useDeleteMeetingSource, useStatus,
 } from "../hooks/useApi";
 import { ApiError } from "../api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { ActiveJob } from "../components/ActiveJob";
 
 type Tab = "summary" | "tasks" | "transcript";
 
@@ -38,6 +40,24 @@ export function MeetingDetail() {
   const log = useGenerationLog(id);
   const source = useMeetingSource(id);
   const deleteSource = useDeleteMeetingSource();
+  const status = useStatus();
+  const qc = useQueryClient();
+  const activeJob = status.data?.active?.find((j) => j.file === id);
+
+  // When this meeting's job finishes (active → absent), refresh the note so the
+  // new summary/transcript appears without a manual reload.
+  const wasActive = useRef(false);
+  useEffect(() => {
+    const isActive = !!activeJob;
+    if (wasActive.current && !isActive) {
+      qc.invalidateQueries({ queryKey: ["meeting", id] });
+      qc.invalidateQueries({ queryKey: ["meeting-log", id] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["history"] });
+    }
+    wasActive.current = isActive;
+  }, [activeJob, id, qc]);
+
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("summary");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -93,13 +113,13 @@ export function MeetingDetail() {
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <button
             onClick={generateTranscript}
-            disabled={transcribe.isPending || sourceGone}
+            disabled={transcribe.isPending || sourceGone || !!activeJob}
             title={sourceGone ? "Arquivo de origem indisponível" : ""}
             className={chip}
           >
             <FileText size={14} /> {transcribe.isPending ? "Enviando…" : "Gerar transcrição"}
           </button>
-          <button onClick={generateSummary} disabled={summarize.isPending} className={chip}>
+          <button onClick={generateSummary} disabled={summarize.isPending || !!activeJob} className={chip}>
             <Sparkles size={14} /> {summarize.isPending ? "Enviando…" : "Gerar resumo"}
           </button>
           <span className="mx-1 h-5 w-px bg-line" />
@@ -135,6 +155,12 @@ export function MeetingDetail() {
           )}
         </div>
       </header>
+
+      {activeJob && (
+        <Card title="Em processamento" eyebrow="Ao vivo" index="●">
+          <ActiveJob job={activeJob} />
+        </Card>
+      )}
 
       {/* Tabs + content */}
       <Card>
