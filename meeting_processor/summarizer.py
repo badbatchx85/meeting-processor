@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import time
 from typing import Protocol
@@ -83,6 +84,34 @@ Regras:
 - Tópicos principais devem ser 3-5 temas centrais discutidos.\
 """
 
+# Sentinela do resumo "falhou" — usada para detectar blocos que não puderam
+# ser resumidos no caminho map-reduce.
+_ERROR_SUMMARY = "Erro ao processar resumo da reunião."
+
+# Estimativa de tokens: chars/_TOKEN_CHARS. Medido em PT + timestamps markdown
+# (~2.5 chars/token). Conservador de propósito (superestima) para fragmentar um
+# pouco antes em vez de estourar a janela de contexto.
+_TOKEN_CHARS = 2.5
+# Margem de segurança (tokens) reservada além do system prompt e da saída.
+_BUDGET_MARGIN = 512
+
+# System prompt do passo "reduce": combina resumos parciais em um só.
+REDUCE_SYSTEM_PROMPT = """\
+Você recebe vários resumos parciais de uma MESMA reunião, em ordem cronológica.
+Combine-os em um único resumo coerente em português brasileiro.
+
+Responda APENAS com JSON válido, sem markdown, sem blocos de código:
+
+{
+  "executive_summary": "Resumo executivo unificado de 3-5 frases cobrindo a reunião inteira",
+  "purpose": "Uma frase com o objetivo central da reunião, ou string vazia"
+}
+
+Regras:
+- Una as ideias dos trechos sem repetição; produza UM resumo executivo fluido.
+- Não invente informação que não esteja nos resumos parciais.\
+"""
+
 
 # ---------------------------------------------------------------------------
 # Interface
@@ -113,7 +142,40 @@ class _BaseSummarizer:
     def __init__(self, config: Settings):
         self.config = config
 
+    @property
+    def context_token_budget(self) -> int:
+        """Tamanho efetivo da janela de contexto do provedor (em tokens).
+
+        Padrão alto: provedores na nuvem (Claude/OpenAI/Gemini) têm janelas
+        grandes e praticamente nunca precisam fragmentar. Subclasses locais
+        sobrescrevem com o valor real.
+        """
+        return 200_000
+
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        return math.ceil(len(text) / _TOKEN_CHARS)
+
+    def _input_token_budget(self) -> int:
+        """Tokens disponíveis para a TRANSCRIÇÃO (fora system prompt + saída)."""
+        budget = (
+            self.context_token_budget
+            - self._estimate_tokens(SYSTEM_PROMPT)
+            - self.config.max_tokens_summary
+            - _BUDGET_MARGIN
+        )
+        return max(budget, 1000)
+
     # API pública -----------------------------------------------------------
+
+    def _build_user_prompt(
+        self, source_filename: str, duration: float, chunked_text: str
+    ) -> str:
+        return (
+            f"Arquivo de origem: {source_filename}\n"
+            f"Duração total: {format_duration(duration)}\n\n"
+            f"--- TRANSCRIÇÃO ---\n\n{chunked_text}"
+        )
 
     def summarize(self, transcript: Transcript, source_filename: str) -> MeetingSummary:
         chunked_text = self._build_chunked_transcript(
@@ -121,21 +183,24 @@ class _BaseSummarizer:
             self.config.summary_chunk_minutes,
         )
 
-        user_prompt = (
-            f"Arquivo de origem: {source_filename}\n"
-            f"Duração total: {format_duration(transcript.duration)}\n\n"
-            f"--- TRANSCRIÇÃO ---\n\n{chunked_text}"
+        user_prompt = self._build_user_prompt(
+            source_filename, transcript.duration, chunked_text
         )
 
         system_prompt = SYSTEM_PROMPT.replace(
             "{chunk_minutes}", str(self.config.summary_chunk_minutes)
         )
 
-        logger.info(
-            "Enviando transcrição ao provedor '%s' para resumo...", self.provider_name
-        )
-        response_text = self._call_llm(system_prompt, user_prompt)
-        summary = self._parse_response(response_text)
+        if self._estimate_tokens(user_prompt) <= self._input_token_budget():
+            logger.info(
+                "Enviando transcrição ao provedor '%s' para resumo...",
+                self.provider_name,
+            )
+            summary = self._parse_response(self._call_llm(system_prompt, user_prompt))
+        else:
+            summary = self._map_reduce_summarize(
+                transcript, source_filename, system_prompt
+            )
 
         logger.info(
             "Resumo gerado (%s): %d janelas, %d tarefas, %d participantes.",
@@ -179,28 +244,62 @@ class _BaseSummarizer:
 
         return "\n".join(lines)
 
-    def _parse_response(self, response_text: str) -> MeetingSummary:
+    @staticmethod
+    def _split_segments(
+        segments: list[TranscriptSegment], char_budget: int
+    ) -> list[list[TranscriptSegment]]:
+        """Agrupa segmentos sequenciais em blocos sob ``char_budget`` chars.
+
+        Nunca divide um segmento; um segmento maior que o orçamento vira um
+        bloco sozinho. ``+ 32`` por segmento aproxima o overhead do timestamp
+        markdown adicionado por ``_build_chunked_transcript``.
+        """
+        chunks: list[list[TranscriptSegment]] = []
+        current: list[TranscriptSegment] = []
+        current_len = 0
+        for seg in segments:
+            seg_len = len(seg.text) + 32
+            if current and current_len + seg_len > char_budget:
+                chunks.append(current)
+                current = []
+                current_len = 0
+            current.append(seg)
+            current_len += seg_len
+        if current:
+            chunks.append(current)
+        return chunks
+
+    @staticmethod
+    def _extract_json(response_text: str) -> dict | None:
+        """Extrai um objeto JSON da resposta do LLM, ou ``None`` se não houver.
+
+        Tolera blocos de código markdown e texto antes/depois do JSON (modelos
+        locais às vezes adicionam preâmbulo). Só retorna ``dict`` — uma resposta
+        que parseia para lista/escalar é tratada como ausência de objeto.
+        """
         cleaned = response_text.strip()
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
-
-        # Modelos locais às vezes adicionam texto antes/depois do JSON.
-        # Se o JSON direto falhar, tenta extrair o primeiro objeto {...}.
         try:
             data = json.loads(cleaned)
         except json.JSONDecodeError:
+            data = None
+        if not isinstance(data, dict):
             match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-            if match:
-                try:
-                    data = json.loads(match.group(0))
-                except json.JSONDecodeError as e:
-                    logger.error("Resposta do LLM não é JSON válido: %s", e)
-                    logger.debug("Resposta bruta: %s", response_text[:500])
-                    return self._empty_summary()
-            else:
-                logger.error("Não foi possível extrair JSON da resposta do LLM.")
-                logger.debug("Resposta bruta: %s", response_text[:500])
-                return self._empty_summary()
+            if not match:
+                return None
+            try:
+                data = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return None
+        return data if isinstance(data, dict) else None
+
+    def _parse_response(self, response_text: str) -> MeetingSummary:
+        data = self._extract_json(response_text)
+        if data is None:
+            logger.error("Não foi possível extrair JSON da resposta do LLM.")
+            logger.debug("Resposta bruta: %s", response_text[:500])
+            return self._empty_summary()
 
         return MeetingSummary(
             executive_summary=data.get("executive_summary", ""),
@@ -219,7 +318,7 @@ class _BaseSummarizer:
     @staticmethod
     def _empty_summary() -> MeetingSummary:
         return MeetingSummary(
-            executive_summary="Erro ao processar resumo da reunião.",
+            executive_summary=_ERROR_SUMMARY,
             time_windows=[],
             action_items=[],
             participants=[],
@@ -228,6 +327,118 @@ class _BaseSummarizer:
             meeting_type="",
             decisions=[],
             open_questions=[],
+        )
+
+    @staticmethod
+    def _dedupe_strings(items: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for it in items:
+            key = it.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(it)
+        return out
+
+    @staticmethod
+    def _dedupe_action_items(items: list[ActionItem]) -> list[ActionItem]:
+        seen: set[str] = set()
+        out: list[ActionItem] = []
+        for ai in items:
+            key = ai.description.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(ai)
+        return out
+
+    def _reduce_narrative(self, partials: list[MeetingSummary]) -> tuple[str, str]:
+        """Sintetiza executive_summary + purpose via uma chamada LLM 'reduce'.
+
+        Em qualquer falha (sem JSON, erro de chamada), cai para a concatenação
+        dos resumos parciais — nunca perde conteúdo.
+        """
+        fallback_summary = "\n\n".join(
+            p.executive_summary for p in partials if p.executive_summary
+        )
+        fallback_purpose = next((p.purpose for p in partials if p.purpose), "")
+
+        blocks = []
+        for i, p in enumerate(partials, 1):
+            parts = [f"[Trecho {i}] {p.executive_summary}"]
+            if p.key_topics:
+                parts.append("Tópicos: " + ", ".join(p.key_topics))
+            if p.decisions:
+                parts.append("Decisões: " + "; ".join(p.decisions))
+            blocks.append("\n".join(parts))
+        user_prompt = "Resumos parciais (em ordem):\n\n" + "\n\n".join(blocks)
+
+        try:
+            data = self._extract_json(self._call_llm(REDUCE_SYSTEM_PROMPT, user_prompt))
+            if data is None:
+                raise ValueError("reduce sem JSON")
+            return (
+                data.get("executive_summary") or fallback_summary,
+                data.get("purpose") or fallback_purpose,
+            )
+        except Exception as e:  # noqa: BLE001 — degradação graciosa
+            logger.warning(
+                "Reduce do resumo falhou (%s); usando concatenação dos parciais.", e
+            )
+            return fallback_summary, fallback_purpose
+
+    def _map_reduce_summarize(
+        self, transcript: Transcript, source_filename: str, system_prompt: str
+    ) -> MeetingSummary:
+        """Resume uma transcrição que não cabe na janela: divide, resume cada
+        bloco (map) e combina (reduce)."""
+        char_budget = int(self._input_token_budget() * _TOKEN_CHARS)
+        chunks = self._split_segments(transcript.segments, char_budget)
+        logger.info(
+            "Transcrição grande para '%s': %d segmentos em %d blocos (map-reduce).",
+            self.provider_name,
+            len(transcript.segments),
+            len(chunks),
+        )
+
+        partials: list[MeetingSummary] = []
+        for i, chunk in enumerate(chunks, 1):
+            chunked_text = self._build_chunked_transcript(
+                chunk, self.config.summary_chunk_minutes
+            )
+            user_prompt = self._build_user_prompt(
+                source_filename, transcript.duration, chunked_text
+            )
+            logger.info("  Resumindo bloco %d/%d (%d segmentos)...", i, len(chunks), len(chunk))
+            partial = self._parse_response(self._call_llm(system_prompt, user_prompt))
+            if partial.executive_summary == _ERROR_SUMMARY:
+                logger.warning("  Bloco %d não pôde ser resumido; ignorando.", i)
+                continue
+            partials.append(partial)
+
+        return self._reduce_partials(partials)
+
+    def _reduce_partials(self, partials: list[MeetingSummary]) -> MeetingSummary:
+        """Combina resumos parciais: listas no código, narrativa via LLM."""
+        if not partials:
+            return self._empty_summary()
+
+        executive_summary, purpose = self._reduce_narrative(partials)
+        return MeetingSummary(
+            executive_summary=executive_summary,
+            time_windows=[tw for p in partials for tw in p.time_windows],
+            action_items=self._dedupe_action_items(
+                [ai for p in partials for ai in p.action_items]
+            ),
+            participants=self._dedupe_strings(
+                [x for p in partials for x in p.participants]
+            ),
+            key_topics=self._dedupe_strings([x for p in partials for x in p.key_topics]),
+            purpose=purpose,
+            meeting_type=next((p.meeting_type for p in partials if p.meeting_type), ""),
+            decisions=self._dedupe_strings([x for p in partials for x in p.decisions]),
+            open_questions=self._dedupe_strings(
+                [x for p in partials for x in p.open_questions]
+            ),
         )
 
 # ---------------------------------------------------------------------------
@@ -305,6 +516,10 @@ class OllamaSummarizer(_BaseSummarizer):
         self.timeout = config.ollama_request_timeout
         self.temperature = config.ollama_temperature
         self.num_ctx = config.ollama_num_ctx
+
+    @property
+    def context_token_budget(self) -> int:
+        return self.num_ctx
 
     def _call_llm(self, system_prompt: str, user_prompt: str, retries: int = 2) -> str:
         url = f"{self.base_url}/api/chat"
@@ -615,4 +830,5 @@ __all__ = [
     "OllamaSummarizer",
     "SummarizerProtocol",
     "SYSTEM_PROMPT",
+    "REDUCE_SYSTEM_PROMPT",
 ]
