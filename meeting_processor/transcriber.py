@@ -137,13 +137,19 @@ class WhisperTranscriber:
     def __init__(self, config: Settings):
         self.config = config
 
-    def transcribe(self, audio_path: Path, progress_callback=None) -> Transcript:
-        """Transcreve um arquivo de áudio escolhendo o backend disponível."""
+    def transcribe(
+        self, audio_path: Path, progress_callback=None, model: str | None = None
+    ) -> Transcript:
+        """Transcreve um arquivo de áudio escolhendo o backend disponível.
+
+        ``model`` sobrescreve ``config.whisper_model`` apenas no backend
+        openai-whisper (o whisper.cpp usa um .bin fixo e ignora o override).
+        """
         backend = (self.config.whisper_backend or "auto").lower()
         cli = resolve_whisper_cli(self.config)
 
         if backend == "openai":
-            return self._transcribe_openai(audio_path, progress_callback)
+            return self._transcribe_openai(audio_path, progress_callback, model)
         if backend == "cpp":
             return self._transcribe_cpp(audio_path, progress_callback)
 
@@ -151,11 +157,13 @@ class WhisperTranscriber:
         if cli is not None and resolve_whisper_model(self.config) is not None:
             return self._transcribe_cpp(audio_path, progress_callback)
         logger.info("whisper.cpp nao encontrado; usando openai-whisper (pip).")
-        return self._transcribe_openai(audio_path, progress_callback)
+        return self._transcribe_openai(audio_path, progress_callback, model)
 
     # -- Backend: openai-whisper (Python puro) -------------------------------
 
-    def _transcribe_openai(self, audio_path: Path, progress_callback=None) -> Transcript:
+    def _transcribe_openai(
+        self, audio_path: Path, progress_callback=None, model: str | None = None
+    ) -> Transcript:
         try:
             import whisper  # openai-whisper
         except ImportError as e:
@@ -163,25 +171,27 @@ class WhisperTranscriber:
                 "openai-whisper não instalado. Rode: pip install -r requirements.txt"
             ) from e
 
+        model_name = model or self.config.whisper_model
+
         if progress_callback:
-            progress_callback(5, f"Carregando modelo {self.config.whisper_model}...")
+            progress_callback(5, f"Carregando modelo {model_name}...")
         logger.info(
             "Transcrevendo %s com openai-whisper (modelo=%s)...",
             audio_path.name,
-            self.config.whisper_model,
+            model_name,
         )
 
         dbg = _debug_logger(self.config)
         size_mb = audio_path.stat().st_size / 1e6 if audio_path.exists() else 0.0
         ctx = {
-            "model": self.config.whisper_model,
+            "model": model_name,
             "language": self.config.whisper_language,
             "audio": str(audio_path),
             "audio_mb": round(size_mb, 1),
         }
         dbg.debug(
             "Início openai-whisper: model=%s lang=%s audio=%s (%.1f MB) initial_prompt=%s",
-            self.config.whisper_model,
+            model_name,
             self.config.whisper_language,
             audio_path.name,
             size_mb,
@@ -194,7 +204,7 @@ class WhisperTranscriber:
 
         try:
             t0 = time.monotonic()
-            model = whisper.load_model(self.config.whisper_model)
+            model = whisper.load_model(model_name)
             dbg.debug(
                 "Modelo carregado em %.1fs (device=%s)",
                 time.monotonic() - t0,
