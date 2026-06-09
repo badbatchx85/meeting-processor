@@ -156,3 +156,60 @@ def test_split_single_chunk_when_under_budget():
     s = FakeSummarizer(_cfg(), budget=16384)
     segs = _segments(3)
     assert len(s._split_segments(segs, char_budget=100_000)) == 1
+
+
+# --- Task 5: reduce / merge -------------------------------------------------
+
+
+def _partials():
+    return [
+        MeetingSummary(
+            executive_summary="Parte A",
+            time_windows=[TimeWindowSummary(start_minutes=0, end_minutes=5, summary="x")],
+            action_items=[ActionItem(description="Tarefa 1")],
+            participants=["Ana"],
+            key_topics=["t1"],
+            purpose="obj A",
+            meeting_type="",
+            decisions=["d1"],
+            open_questions=[],
+        ),
+        MeetingSummary(
+            executive_summary="Parte B",
+            time_windows=[TimeWindowSummary(start_minutes=5, end_minutes=10, summary="y")],
+            action_items=[ActionItem(description="tarefa 1"), ActionItem(description="Tarefa 2")],
+            participants=["ana", "Bia"],
+            key_topics=["t1", "t2"],
+            purpose="obj B",
+            meeting_type="daily",
+            decisions=["d1", "d2"],
+            open_questions=["q1"],
+        ),
+    ]
+
+
+def test_reduce_merges_lists_programmatically():
+    s = FakeSummarizer(_cfg(), budget=16384, reduce_response=_summary_json("merged", purpose="P"))
+    out = s._reduce_partials(_partials())
+    assert [tw.summary for tw in out.time_windows] == ["x", "y"]            # ordem
+    assert [a.description for a in out.action_items] == ["Tarefa 1", "Tarefa 2"]  # dedup case-insensitive
+    assert out.participants == ["Ana", "Bia"]                               # dedup, ordem preservada
+    assert out.key_topics == ["t1", "t2"]
+    assert out.decisions == ["d1", "d2"]
+    assert out.open_questions == ["q1"]
+    assert out.meeting_type == "daily"                                      # 1º não-vazio
+
+
+def test_reduce_uses_llm_narrative():
+    s = FakeSummarizer(_cfg(), budget=16384, reduce_response=_summary_json("RESUMO FINAL", purpose="P"))
+    out = s._reduce_partials(_partials())
+    assert out.executive_summary == "RESUMO FINAL"
+    assert out.purpose == "P"
+    assert len(s.reduce_calls) == 1
+
+
+def test_reduce_narrative_falls_back_on_bad_json():
+    s = FakeSummarizer(_cfg(), budget=16384, reduce_response="desculpe, não consegui")
+    out = s._reduce_partials(_partials())
+    assert out.executive_summary == "Parte A\n\nParte B"   # concatenação dos parciais
+    assert out.purpose == "obj A"                           # 1º purpose não-vazio

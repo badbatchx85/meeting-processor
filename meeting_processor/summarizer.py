@@ -320,6 +320,87 @@ class _BaseSummarizer:
             open_questions=[],
         )
 
+    @staticmethod
+    def _dedupe_strings(items: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for it in items:
+            key = it.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(it)
+        return out
+
+    @staticmethod
+    def _dedupe_action_items(items: list[ActionItem]) -> list[ActionItem]:
+        seen: set[str] = set()
+        out: list[ActionItem] = []
+        for ai in items:
+            key = ai.description.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(ai)
+        return out
+
+    def _reduce_narrative(self, partials: list[MeetingSummary]) -> tuple[str, str]:
+        """Sintetiza executive_summary + purpose via uma chamada LLM 'reduce'.
+
+        Em qualquer falha (sem JSON, erro de chamada), cai para a concatenação
+        dos resumos parciais — nunca perde conteúdo.
+        """
+        fallback_summary = "\n\n".join(
+            p.executive_summary for p in partials if p.executive_summary
+        )
+        fallback_purpose = next((p.purpose for p in partials if p.purpose), "")
+
+        blocks = []
+        for i, p in enumerate(partials, 1):
+            parts = [f"[Trecho {i}] {p.executive_summary}"]
+            if p.key_topics:
+                parts.append("Tópicos: " + ", ".join(p.key_topics))
+            if p.decisions:
+                parts.append("Decisões: " + "; ".join(p.decisions))
+            blocks.append("\n".join(parts))
+        user_prompt = "Resumos parciais (em ordem):\n\n" + "\n\n".join(blocks)
+
+        try:
+            data = self._extract_json(self._call_llm(REDUCE_SYSTEM_PROMPT, user_prompt))
+            if data is None:
+                raise ValueError("reduce sem JSON")
+            return (
+                data.get("executive_summary") or fallback_summary,
+                data.get("purpose") or fallback_purpose,
+            )
+        except Exception as e:  # noqa: BLE001 — degradação graciosa
+            logger.warning(
+                "Reduce do resumo falhou (%s); usando concatenação dos parciais.", e
+            )
+            return fallback_summary, fallback_purpose
+
+    def _reduce_partials(self, partials: list[MeetingSummary]) -> MeetingSummary:
+        """Combina resumos parciais: listas no código, narrativa via LLM."""
+        if not partials:
+            return self._empty_summary()
+
+        executive_summary, purpose = self._reduce_narrative(partials)
+        return MeetingSummary(
+            executive_summary=executive_summary,
+            time_windows=[tw for p in partials for tw in p.time_windows],
+            action_items=self._dedupe_action_items(
+                [ai for p in partials for ai in p.action_items]
+            ),
+            participants=self._dedupe_strings(
+                [x for p in partials for x in p.participants]
+            ),
+            key_topics=self._dedupe_strings([x for p in partials for x in p.key_topics]),
+            purpose=purpose,
+            meeting_type=next((p.meeting_type for p in partials if p.meeting_type), ""),
+            decisions=self._dedupe_strings([x for p in partials for x in p.decisions]),
+            open_questions=self._dedupe_strings(
+                [x for p in partials for x in p.open_questions]
+            ),
+        )
+
 # ---------------------------------------------------------------------------
 # Provedor: Claude (Anthropic API)
 # ---------------------------------------------------------------------------
