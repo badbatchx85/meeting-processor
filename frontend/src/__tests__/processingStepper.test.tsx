@@ -5,6 +5,7 @@ import type { JobProgress } from "../api/types";
 
 const job: JobProgress = {
   file: "reuniao.mp4",
+  started: "2026-06-08T12:00:00",
   status: "processing",
   stage_number: 2,
   stage_total: 6,

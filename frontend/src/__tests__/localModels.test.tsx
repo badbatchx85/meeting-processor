@@ -19,7 +19,7 @@ function setup() {
 }
 
 function stub(
-  local: { ollama_running: boolean; installed: string[]; suggested: string[] },
+  local: { ollama_running: boolean; ollama_installed?: boolean; installed: string[]; suggested: string[] },
   pullStatus: Record<string, unknown> = {},
 ) {
   return vi.fn(async (url: string, opts?: RequestInit) => {
@@ -68,9 +68,25 @@ describe("Settings — local Ollama models", () => {
     expect(await screen.findByText(/42%/)).toBeInTheDocument();
   });
 
-  it("shows a notice when Ollama is not running", async () => {
-    vi.stubGlobal("fetch", stub({ ollama_running: false, installed: [], suggested: ["qwen2.5:7b"] }));
+  it("tells the user to install when Ollama is not installed", async () => {
+    vi.stubGlobal("fetch", stub({ ollama_running: false, ollama_installed: false, installed: [], suggested: ["qwen2.5:7b"] }));
     setup();
-    expect(await screen.findByText(/não está rodando/i)).toBeInTheDocument();
+    expect(await screen.findByText(/não está instalado/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Iniciar Ollama/i })).not.toBeInTheDocument();
+  });
+
+  it("offers a Start button when Ollama is installed but stopped, and POSTs the start", async () => {
+    const fetchMock = stub({ ollama_running: false, ollama_installed: true, installed: [], suggested: ["qwen2.5:7b"] });
+    vi.stubGlobal("fetch", fetchMock);
+    setup();
+    expect(await screen.findByText(/instalado, mas não está rodando/i)).toBeInTheDocument();
+    const btn = screen.getByRole("button", { name: /Iniciar Ollama/i });
+    fireEvent.click(btn);
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([u, o]) => String(u).endsWith("/api/llm/local-models/start") && o?.method === "POST",
+      );
+      expect(call).toBeTruthy();
+    });
   });
 });

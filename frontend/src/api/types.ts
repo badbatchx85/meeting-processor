@@ -36,14 +36,14 @@ export interface StageStep {
   percent: number; detail: string;
 }
 export interface JobProgress {
-  file: string; status: string;
+  file: string; started: string; status: string;
   stage_number: number; stage_total: number; stage_label: string;
   stage_percent: number; percent: number; detail: string;
   stages: StageStep[];
 }
 export interface StatusResponse { watcher_alive: boolean; active: JobProgress[]; }
 export interface Config { watch_dir: string; steps: Steps; }
-export interface LocalModels { ollama_running: boolean; installed: string[]; suggested: string[]; }
+export interface LocalModels { ollama_running: boolean; ollama_installed: boolean; installed: string[]; suggested: string[]; }
 export interface PullStatus { model?: string; percent?: number; status?: string; done?: boolean; error?: string | null; }
 export interface GenerationLogEntry {
   action: "transcript" | "summary" | "delete_source";

@@ -90,6 +90,23 @@ export function usePullModel() {
   });
 }
 
+export function useStartOllama() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post("/api/llm/local-models/start"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["local-models"] }),
+  });
+}
+
+export function useCancelJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (job: { file: string; started?: string }) =>
+      api.post("/api/process/cancel", job),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["status"] }),
+  });
+}
+
 export function useSetKey() {
   const qc = useQueryClient();
   return useMutation({

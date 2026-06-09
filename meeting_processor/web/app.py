@@ -175,6 +175,13 @@ def _ollama_installed(base_url: str) -> list[str] | None:
         return None
 
 
+def _ollama_binary_present() -> bool:
+    """True se o binário ``ollama`` existe no PATH (instalado, mesmo que parado)."""
+    from ..ollama_service import is_installed
+
+    return is_installed()
+
+
 # Progresso do download de modelo local (um por vez; estado por processo).
 _PULL_LOCK = threading.Lock()
 _PULL_STATE: dict[str, Any] = {}
@@ -382,6 +389,35 @@ def _delete_meeting(
     }
 
 
+def _history_file(vault_path: Path) -> Path:
+    """Caminho do arquivo de histórico de processamento."""
+    return vault_path / "wiki" / ".processing-history.json"
+
+
+def _load_history_data(vault_path: Path) -> list[dict[str, Any]] | None:
+    """Lê o histórico; ``None`` se o arquivo não existe ou está corrompido."""
+    path = _history_file(vault_path)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def _write_history_data(vault_path: Path, data: list[dict[str, Any]]) -> None:
+    _history_file(vault_path).write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def _close_active(entry: dict[str, Any], message: str) -> None:
+    """Fecha um job ativo: marca erro, anota o motivo e carimba o término."""
+    entry["status"] = "error"
+    entry["error_message"] = entry.get("error_message") or message
+    entry["completed"] = entry.get("completed") or datetime.now().isoformat()
+
+
 def _remove_history_entry(
     vault_path: Path,
     file_name: str,
@@ -393,14 +429,9 @@ def _remove_history_entry(
     permite distinguir entre múltiplas tentativas do mesmo arquivo. Se
     ``started_at`` for None, remove a primeira entrada com aquele file.
     """
-    history_path = vault_path / "wiki" / ".processing-history.json"
-    if not history_path.exists():
-        return {"ok": False, "error": "Histórico vazio"}
-
-    try:
-        data = json.loads(history_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {"ok": False, "error": "Histórico corrompido"}
+    data = _load_history_data(vault_path)
+    if data is None:
+        return {"ok": False, "error": "Histórico vazio ou corrompido"}
 
     new_data = []
     removed = 0
@@ -415,35 +446,76 @@ def _remove_history_entry(
     if removed == 0:
         return {"ok": False, "error": "Entrada não encontrada"}
 
-    history_path.write_text(
-        json.dumps(new_data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    _write_history_data(vault_path, new_data)
     return {"ok": True, "removed": removed}
 
 
 def _clear_history_errors(vault_path: Path) -> dict[str, Any]:
     """Remove todas as entradas com status=error do histórico."""
-    history_path = vault_path / "wiki" / ".processing-history.json"
-    if not history_path.exists():
+    data = _load_history_data(vault_path)
+    if data is None:
         return {"ok": True, "removed": 0}
-
-    try:
-        data = json.loads(history_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {"ok": False, "error": "Histórico corrompido"}
 
     new_data = [e for e in data if e.get("status") != "error"]
     removed = len(data) - len(new_data)
 
-    history_path.write_text(
-        json.dumps(new_data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    _write_history_data(vault_path, new_data)
     return {"ok": True, "removed": removed}
+
+
+def _reconcile_stale_jobs(vault_path: Path) -> int:
+    """Marca como ``error`` jobs deixados em ``waiting``/``processing``.
+
+    Os jobs rodam em threads daemon dentro do processo do servidor; quando ele é
+    reiniciado, essas threads morrem mas a entrada no histórico continua
+    ``processing`` para sempre — a UI fica "presa". Chamado no boot, esse passo
+    fecha qualquer job órfão para que ele saia da lista de ativos.
+    """
+    data = _load_history_data(vault_path)
+    if data is None:
+        return 0
+
+    changed = 0
+    for entry in data:
+        if entry.get("status") in ("waiting", "processing"):
+            _close_active(entry, "Processamento interrompido (o app foi reiniciado ou o job travou).")
+            changed += 1
+
+    if changed:
+        _write_history_data(vault_path, data)
+    return changed
+
+
+def _cancel_active_job(
+    vault_path: Path, file_name: str, started_at: str | None = None
+) -> dict[str, Any]:
+    """Marca um job ativo (``waiting``/``processing``) como ``error``.
+
+    Usado pelo botão "Limpar" da UI para destravar um job preso. Identifica por
+    ``(file, started)``; se ``started`` for None, casa o primeiro ativo do arquivo.
+    Não tenta matar a thread (sem handle) — apenas concilia o histórico.
+    """
+    data = _load_history_data(vault_path)
+    if data is None:
+        return {"ok": False, "error": "Histórico indisponível"}
+
+    for entry in data:
+        if entry.get("file") != file_name:
+            continue
+        if entry.get("status") not in ("waiting", "processing"):
+            continue
+        if started_at is not None and entry.get("started") != started_at:
+            continue
+        _close_active(entry, "Cancelado pelo usuário.")
+        _write_history_data(vault_path, data)
+        return {"ok": True}
+
+    return {"ok": False, "error": "Job ativo não encontrado"}
 
 
 def _read_status(vault_path: Path, watch_dir: str | None = None) -> dict[str, Any]:
     heartbeat = vault_path / "wiki" / ".watcher-heartbeat"
-    history = vault_path / "wiki" / ".processing-history.json"
+    history = _history_file(vault_path)
 
     watcher_alive = False
     last_heartbeat: str | None = None
@@ -526,6 +598,7 @@ def _job_progress(entry: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "file": entry.get("file", ""),
+        "started": entry.get("started", ""),
         "status": entry.get("status", "processing"),
         "stage_number": stage_number,
         "stage_total": total,
@@ -572,6 +645,11 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        # Fecha jobs órfãos de uma execução anterior (threads que não sobrevivem
+        # ao restart), para que a UI não fique presa em "processando".
+        reconciled = _reconcile_stale_jobs(config.vault_path)
+        if reconciled:
+            logger.info("Jobs órfãos reconciliados no boot: %d", reconciled)
         yield
         if supervisor.is_running():
             logger.info("Frontend desligando — parando watcher também.")
@@ -1303,9 +1381,24 @@ def create_app(config: Settings | None = None) -> FastAPI:
         inst = installed or []
         return {
             "ollama_running": running,
+            # Se responde, está instalado; senão, olha o binário no PATH.
+            "ollama_installed": running or _ollama_binary_present(),
             "installed": inst,
             "suggested": [m for m in _LOCAL_SUGGESTED if m not in inst],
         }
+
+    @app.post("/api/llm/local-models/start")
+    async def api_start_ollama():
+        """Sobe o ``ollama serve`` se o binário existir e ainda não estiver no ar."""
+        if not _ollama_binary_present():
+            return JSONResponse(
+                {"ok": False, "error": "Ollama não está instalado."},
+                status_code=400,
+            )
+        from ..ollama_service import ensure_running
+
+        running = await run_in_threadpool(ensure_running, config)
+        return {"ok": bool(running), "running": bool(running)}
 
     @app.post("/api/llm/local-models/pull")
     async def api_pull_model(payload: dict):
@@ -1411,6 +1504,20 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True, "queued": True, "file": str(path)}
+
+    @app.post("/api/process/cancel")
+    async def api_cancel_job(payload: dict):
+        """Destrava um job preso, marcando-o como erro no histórico."""
+        p = payload or {}
+        result = _cancel_active_job(
+            config.vault_path, p.get("file", ""), p.get("started") or None
+        )
+        if not result["ok"]:
+            return JSONResponse(
+                {"ok": False, "error": result.get("error", "Não encontrado")},
+                status_code=404,
+            )
+        return {"ok": True}
 
     def _process_path_async(path: Path, transcript_only: bool = False) -> None:
         """Dispara o pipeline para um arquivo em uma thread daemon."""

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Play, Square, RotateCw, FileVideo, Upload } from "lucide-react";
+import { Play, Square, RotateCw, FileVideo, Upload, X } from "lucide-react";
 import { Card } from "../components/Card";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { useToast } from "../components/Toast";
-import { useHealth, useWatcher, useMeetings, useWatcherControl, useProcessFile, useUploadFile, useStatus, useHistory } from "../hooks/useApi";
+import { useHealth, useWatcher, useMeetings, useWatcherControl, useProcessFile, useUploadFile, useStatus, useHistory, useCancelJob } from "../hooks/useApi";
 import { ConversionHistory } from "../components/ConversionHistory";
 import { ProcessingStepper } from "../components/ProcessingStepper";
 import { ApiError } from "../api/client";
@@ -37,12 +37,15 @@ export function Dashboard() {
   const upload = useUploadFile();
   const status = useStatus();
   const history = useHistory();
+  const cancelJob = useCancelJob();
   const toast = useToast();
   const qc = useQueryClient();
   const [file, setFile] = useState("");
   const [selected, setSelected] = useState<File | null>(null);
   const [transcriptOnly, setTranscriptOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onError = (e: unknown) => toast("err", e instanceof ApiError ? e.message : "Erro");
 
   // Quando um job termina (lista de ativos esvazia), recarrega as reuniões.
   const activeCount = status.data?.active?.length ?? 0;
@@ -61,7 +64,7 @@ export function Dashboard() {
       { file: file.trim(), mode: transcriptOnly ? "transcript" : "full" },
       {
         onSuccess: () => { toast("ok", "Processamento enfileirado."); setFile(""); },
-        onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
+        onError,
       },
     );
   };
@@ -170,7 +173,21 @@ export function Dashboard() {
             <Card title="Em processamento" eyebrow="Ao vivo" index="●">
               <div className="flex flex-col gap-6">
                 {status.data.active?.map((job) => (
-                  <ProcessingStepper key={job.file} job={job} />
+                  <div key={job.file} className="flex flex-col gap-2">
+                    <ProcessingStepper job={job} />
+                    <button
+                      onClick={() =>
+                        cancelJob.mutate(
+                          { file: job.file, started: job.started },
+                          { onSuccess: () => toast("ok", "Job removido."), onError },
+                        )
+                      }
+                      disabled={cancelJob.isPending}
+                      className={`${btnGhost} w-fit text-xs`}
+                    >
+                      <X size={13} /> Limpar (parou de responder)
+                    </button>
+                  </div>
                 ))}
               </div>
             </Card>

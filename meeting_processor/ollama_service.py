@@ -23,6 +23,11 @@ def is_running(base_url: str) -> bool:
         return False
 
 
+def is_installed() -> bool:
+    """True se o binário ``ollama`` existe no PATH (mesmo que parado)."""
+    return shutil.which("ollama") is not None
+
+
 def ensure_running(config: Settings, timeout: float = 15.0) -> bool:
     """Garante o Ollama no ar; se preciso, roda ``ollama serve`` e aguarda.
 

@@ -15,10 +15,12 @@ export function ConversionHistory({
   entries: HistoryEntry[];
   limit?: number;
 }) {
-  if (entries.length === 0) {
+  // Defensivo: nunca quebrar a Dashboard se a API devolver algo inesperado.
+  const list = Array.isArray(entries) ? entries : [];
+  if (list.length === 0) {
     return <EmptyState title="Nenhuma conversão ainda" hint="Processe um arquivo para começar." />;
   }
-  const rows = limit ? entries.slice(0, limit) : entries;
+  const rows = limit ? list.slice(0, limit) : list;
 
   return (
     <ul className="divide-y divide-line-soft">

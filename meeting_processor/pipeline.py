@@ -92,17 +92,21 @@ class MeetingPipeline:
             if not steps[key]:
                 job.skip(key)
 
-        # Etapa 1: Extrair áudio (sempre)
-        logger.info("[1] Extraindo audio...")
-        job.advance("audio", "Convertendo video para WAV 16kHz")
-        job.set_progress("audio", 10)
-        self.dashboard.update(job)
-        audio_path = extract_audio(video_path, self.config)
-        size_mb = audio_path.stat().st_size / 1_048_576
-        job.set_progress("audio", 100, f"{size_mb:.1f} MB extraidos")
-        self.dashboard.update(job)
-
+        # ``audio_path`` precisa existir para o ``finally``: a extração roda
+        # dentro do try para que qualquer falha aqui marque o job como erro
+        # (do contrário ele ficaria preso em "processando").
+        audio_path: Path | None = None
         try:
+            # Etapa 1: Extrair áudio (sempre)
+            logger.info("[1] Extraindo audio...")
+            job.advance("audio", "Convertendo video para WAV 16kHz")
+            job.set_progress("audio", 10)
+            self.dashboard.update(job)
+            audio_path = extract_audio(video_path, self.config)
+            size_mb = audio_path.stat().st_size / 1_048_576
+            job.set_progress("audio", 100, f"{size_mb:.1f} MB extraidos")
+            self.dashboard.update(job)
+
             # Etapa 2: Transcrever (sempre)
             logger.info("[2] Transcrevendo audio com Whisper...")
             job.advance("transcription", f"Modelo: {self.config.whisper_model}")
@@ -163,8 +167,8 @@ class MeetingPipeline:
             raise
 
         finally:
-            # Limpar arquivo temporário de áudio
-            if self.config.cleanup_temp and audio_path.exists():
+            # Limpar arquivo temporário de áudio (pode não existir se a extração falhou)
+            if self.config.cleanup_temp and audio_path is not None and audio_path.exists():
                 audio_path.unlink()
                 logger.debug("Arquivo temporario removido: %s", audio_path)
 

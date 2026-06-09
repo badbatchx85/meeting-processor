@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/Toast";
-import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus, useStartOllama } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import type { Llm, Steps } from "../api/types";
 
@@ -70,6 +70,7 @@ export function Settings() {
   const isLocal = provider === "local";
   const localModels = useLocalModels(isLocal);
   const pull = usePullModel();
+  const startOllama = useStartOllama();
   const pullStatus = usePullStatus(isLocal);
   // Quando o download termina, atualiza a lista de instalados.
   const pullDone = pullStatus.data?.done;
@@ -99,6 +100,20 @@ export function Settings() {
   const doPull = (m: string) =>
     pull.mutate(m, {
       onSuccess: () => toast("ok", `Baixando ${m}… clique Atualizar quando terminar.`),
+      onError,
+    });
+
+  const doStartOllama = () =>
+    startOllama.mutate(undefined, {
+      onSuccess: (r) => {
+        const running = (r as { running?: boolean })?.running;
+        if (running) {
+          toast("ok", "Ollama iniciado.");
+          localModels.refetch();
+        } else {
+          toast("err", "Não consegui iniciar o Ollama. Rode `ollama serve` no terminal.");
+        }
+      },
       onError,
     });
 
@@ -164,10 +179,26 @@ export function Settings() {
               {localModels.isLoading ? (
                 <p className="text-muted-soft">Consultando o Ollama…</p>
               ) : !localModels.data?.ollama_running ? (
-                <p className="text-amber-700">
-                  Ollama não está rodando. Inicie com <code>ollama serve</code> ou instale em{" "}
-                  <a className="text-brand hover:underline" href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>.
-                </p>
+                !localModels.data?.ollama_installed ? (
+                  <p className="text-amber-700">
+                    Ollama não está instalado. Instale em{" "}
+                    <a className="text-brand hover:underline" href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>{" "}
+                    e baixe um modelo.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-amber-700">
+                      Ollama está instalado, mas não está rodando.
+                    </p>
+                    <button onClick={doStartOllama} disabled={startOllama.isPending}
+                      className="w-fit rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark disabled:opacity-50">
+                      {startOllama.isPending ? "Iniciando…" : "Iniciar Ollama"}
+                    </button>
+                    <span className="text-xs text-muted-soft">
+                      Ou rode <code>ollama serve</code> no terminal.
+                    </span>
+                  </div>
+                )
               ) : localModels.data.installed.length > 0 ? (
                 <>
                   <div className="flex gap-2">

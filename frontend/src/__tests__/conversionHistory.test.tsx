@@ -37,4 +37,10 @@ describe("ConversionHistory", () => {
     render(<ConversionHistory entries={[]} />);
     expect(screen.getByText(/Nenhuma convers/i)).toBeInTheDocument();
   });
+
+  it("does not crash when given a non-array (unexpected API shape)", () => {
+    // @ts-expect-error — simula uma resposta inesperada da API
+    render(<ConversionHistory entries={{}} />);
+    expect(screen.getByText(/Nenhuma convers/i)).toBeInTheDocument();
+  });
 });

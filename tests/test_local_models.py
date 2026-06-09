@@ -19,6 +19,63 @@ def test_local_models_not_running(client, monkeypatch):
     assert "qwen2.5:7b" in body["suggested"]
 
 
+def test_local_models_installed_but_not_running(client, monkeypatch):
+    """Ollama binário presente porém servidor parado: installed=True, running=False."""
+    monkeypatch.setattr(appmod, "_ollama_installed", lambda base: None)
+    monkeypatch.setattr(appmod, "_ollama_binary_present", lambda: True)
+    body = client.get("/api/llm/local-models").json()
+    assert body["ollama_running"] is False
+    assert body["ollama_installed"] is True
+
+
+def test_local_models_not_installed(client, monkeypatch):
+    """Sem binário e sem servidor: o usuário precisa instalar."""
+    monkeypatch.setattr(appmod, "_ollama_installed", lambda base: None)
+    monkeypatch.setattr(appmod, "_ollama_binary_present", lambda: False)
+    body = client.get("/api/llm/local-models").json()
+    assert body["ollama_running"] is False
+    assert body["ollama_installed"] is False
+
+
+def test_local_models_running_implies_installed(client, monkeypatch):
+    """Se está rodando, está instalado — sem precisar olhar o PATH."""
+    monkeypatch.setattr(appmod, "_ollama_installed", lambda base: ["qwen2.5:7b"])
+    monkeypatch.setattr(appmod, "_ollama_binary_present", lambda: False)
+    body = client.get("/api/llm/local-models").json()
+    assert body["ollama_running"] is True
+    assert body["ollama_installed"] is True
+
+
+def test_start_ollama_rejects_when_not_installed(client, monkeypatch):
+    monkeypatch.setattr(appmod, "_ollama_binary_present", lambda: False)
+    r = client.post("/api/llm/local-models/start")
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+
+
+def test_start_ollama_invokes_ensure_running(client, monkeypatch):
+    monkeypatch.setattr(appmod, "_ollama_binary_present", lambda: True)
+    calls = {}
+    monkeypatch.setattr(
+        "meeting_processor.ollama_service.ensure_running",
+        lambda cfg, *a, **k: calls.setdefault("called", True) or True,
+    )
+    r = client.post("/api/llm/local-models/start")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True, "running": True}
+    assert calls.get("called") is True
+
+
+def test_start_ollama_reports_failure_to_come_up(client, monkeypatch):
+    monkeypatch.setattr(appmod, "_ollama_binary_present", lambda: True)
+    monkeypatch.setattr(
+        "meeting_processor.ollama_service.ensure_running", lambda cfg, *a, **k: False
+    )
+    r = client.post("/api/llm/local-models/start")
+    assert r.status_code == 200
+    assert r.json() == {"ok": False, "running": False}
+
+
 def test_pull_rejects_empty(client):
     r = client.post("/api/llm/local-models/pull", json={"model": ""})
     assert r.status_code == 400
