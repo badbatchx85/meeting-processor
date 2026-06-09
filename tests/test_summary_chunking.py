@@ -213,3 +213,14 @@ def test_reduce_narrative_falls_back_on_bad_json():
     out = s._reduce_partials(_partials())
     assert out.executive_summary == "Parte A\n\nParte B"   # concatenação dos parciais
     assert out.purpose == "obj A"                           # 1º purpose não-vazio
+
+
+# --- _extract_json só devolve dict --------------------------------------
+
+
+def test_extract_json_rejects_non_dict_and_parses_dict():
+    assert _BaseSummarizer._extract_json('{"a": 1}') == {"a": 1}
+    assert _BaseSummarizer._extract_json("[1, 2, 3]") is None
+    assert _BaseSummarizer._extract_json("texto sem json") is None
+    # objeto embutido em texto/array ainda é recuperado:
+    assert _BaseSummarizer._extract_json('lixo [{"a": 1}] fim') == {"a": 1}

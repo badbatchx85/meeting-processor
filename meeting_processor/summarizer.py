@@ -269,21 +269,25 @@ class _BaseSummarizer:
         """Extrai um objeto JSON da resposta do LLM, ou ``None`` se não houver.
 
         Tolera blocos de código markdown e texto antes/depois do JSON (modelos
-        locais às vezes adicionam preâmbulo).
+        locais às vezes adicionam preâmbulo). Só retorna ``dict`` — uma resposta
+        que parseia para lista/escalar é tratada como ausência de objeto.
         """
         cleaned = response_text.strip()
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
         try:
-            return json.loads(cleaned)
+            data = json.loads(cleaned)
         except json.JSONDecodeError:
+            data = None
+        if not isinstance(data, dict):
             match = re.search(r"\{.*\}", cleaned, re.DOTALL)
             if not match:
                 return None
             try:
-                return json.loads(match.group(0))
+                data = json.loads(match.group(0))
             except json.JSONDecodeError:
                 return None
+        return data if isinstance(data, dict) else None
 
     def _parse_response(self, response_text: str) -> MeetingSummary:
         data = self._extract_json(response_text)
