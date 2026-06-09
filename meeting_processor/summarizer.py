@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import time
 from typing import Protocol
@@ -87,6 +88,13 @@ Regras:
 # ser resumidos no caminho map-reduce.
 _ERROR_SUMMARY = "Erro ao processar resumo da reunião."
 
+# Estimativa de tokens: chars/_TOKEN_CHARS. Medido em PT + timestamps markdown
+# (~2.5 chars/token). Conservador de propósito (superestima) para fragmentar um
+# pouco antes em vez de estourar a janela de contexto.
+_TOKEN_CHARS = 2.5
+# Margem de segurança (tokens) reservada além do system prompt e da saída.
+_BUDGET_MARGIN = 512
+
 # System prompt do passo "reduce": combina resumos parciais em um só.
 REDUCE_SYSTEM_PROMPT = """\
 Você recebe vários resumos parciais de uma MESMA reunião, em ordem cronológica.
@@ -133,6 +141,30 @@ class _BaseSummarizer:
 
     def __init__(self, config: Settings):
         self.config = config
+
+    @property
+    def context_token_budget(self) -> int:
+        """Tamanho efetivo da janela de contexto do provedor (em tokens).
+
+        Padrão alto: provedores na nuvem (Claude/OpenAI/Gemini) têm janelas
+        grandes e praticamente nunca precisam fragmentar. Subclasses locais
+        sobrescrevem com o valor real.
+        """
+        return 200_000
+
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        return math.ceil(len(text) / _TOKEN_CHARS)
+
+    def _input_token_budget(self) -> int:
+        """Tokens disponíveis para a TRANSCRIÇÃO (fora system prompt + saída)."""
+        budget = (
+            self.context_token_budget
+            - self._estimate_tokens(SYSTEM_PROMPT)
+            - self.config.max_tokens_summary
+            - _BUDGET_MARGIN
+        )
+        return max(budget, 1000)
 
     # API pública -----------------------------------------------------------
 
@@ -331,6 +363,10 @@ class OllamaSummarizer(_BaseSummarizer):
         self.timeout = config.ollama_request_timeout
         self.temperature = config.ollama_temperature
         self.num_ctx = config.ollama_num_ctx
+
+    @property
+    def context_token_budget(self) -> int:
+        return self.num_ctx
 
     def _call_llm(self, system_prompt: str, user_prompt: str, retries: int = 2) -> str:
         url = f"{self.base_url}/api/chat"
