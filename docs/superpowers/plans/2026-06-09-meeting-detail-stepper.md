@@ -139,7 +139,14 @@ git commit -m "feat(ui): extract reusable ActiveJob (stepper + cancel)"
 
 ---
 
-### Task 2: Dashboard uses `ActiveJob` (refactor, no behavior change)
+### Task 2: Dashboard uses `ActiveJob` (refactor, no behavior change) — DEFERRED
+
+> **Deferred:** `Dashboard.tsx` currently carries uncommitted "stuck-jobs" work
+> that modifies the very block this task would refactor. Committing `Dashboard.tsx`
+> would entangle the two unrelated features. Skip this task until the stuck-jobs
+> work is committed; then Dashboard can adopt `<ActiveJob>` in a one-line follow-up.
+> The feature is fully functional without it (Dashboard keeps its inline block;
+> only MeetingDetail consumes `ActiveJob` for now).
 
 **Files:**
 - Modify: `frontend/src/pages/Dashboard.tsx`
