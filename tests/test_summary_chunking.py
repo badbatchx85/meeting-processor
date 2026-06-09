@@ -224,3 +224,43 @@ def test_extract_json_rejects_non_dict_and_parses_dict():
     assert _BaseSummarizer._extract_json("texto sem json") is None
     # objeto embutido em texto/array ainda é recuperado:
     assert _BaseSummarizer._extract_json('lixo [{"a": 1}] fim') == {"a": 1}
+
+
+# --- Task 6: integração summarize() single-pass vs map-reduce ---------------
+
+
+def test_short_transcript_is_single_pass():
+    s = FakeSummarizer(
+        _cfg(), budget=200_000, map_responses=[_summary_json("um pass só")]
+    )
+    out = s.summarize(_transcript(3), "reuniao.mp4")
+    assert out.executive_summary == "um pass só"
+    assert len(s.map_calls) == 1
+    assert len(s.reduce_calls) == 0
+
+
+def test_long_transcript_maps_then_reduces():
+    # orçamento pequeno => muitos blocos; transcrição grande o bastante p/ dividir
+    s = FakeSummarizer(
+        _cfg(),
+        budget=2000,
+        map_responses=[_summary_json("parcial")],
+        reduce_response=_summary_json("RESUMO FINAL", purpose="P"),
+    )
+    out = s.summarize(_transcript(120), "reuniao.mp4")
+    assert len(s.map_calls) >= 2            # dividiu em vários blocos
+    assert len(s.reduce_calls) == 1         # exatamente um reduce
+    assert out.executive_summary == "RESUMO FINAL"
+
+
+def test_bad_chunk_is_skipped_not_fatal():
+    # 1º bloco retorna lixo (vira _empty_summary e é ignorado), 2º é válido
+    s = FakeSummarizer(
+        _cfg(),
+        budget=2000,
+        map_responses=["isso não é json", _summary_json("parcial bom", participants=["Ana"])],
+        reduce_response=_summary_json("RESUMO FINAL"),
+    )
+    out = s.summarize(_transcript(120), "reuniao.mp4")
+    assert out.executive_summary == "RESUMO FINAL"   # não quebrou
+    assert "Ana" in out.participants                  # bloco bom contribuiu

@@ -191,11 +191,16 @@ class _BaseSummarizer:
             "{chunk_minutes}", str(self.config.summary_chunk_minutes)
         )
 
-        logger.info(
-            "Enviando transcrição ao provedor '%s' para resumo...", self.provider_name
-        )
-        response_text = self._call_llm(system_prompt, user_prompt)
-        summary = self._parse_response(response_text)
+        if self._estimate_tokens(user_prompt) <= self._input_token_budget():
+            logger.info(
+                "Enviando transcrição ao provedor '%s' para resumo...",
+                self.provider_name,
+            )
+            summary = self._parse_response(self._call_llm(system_prompt, user_prompt))
+        else:
+            summary = self._map_reduce_summarize(
+                transcript, source_filename, system_prompt
+            )
 
         logger.info(
             "Resumo gerado (%s): %d janelas, %d tarefas, %d participantes.",
@@ -380,6 +385,37 @@ class _BaseSummarizer:
                 "Reduce do resumo falhou (%s); usando concatenação dos parciais.", e
             )
             return fallback_summary, fallback_purpose
+
+    def _map_reduce_summarize(
+        self, transcript: Transcript, source_filename: str, system_prompt: str
+    ) -> MeetingSummary:
+        """Resume uma transcrição que não cabe na janela: divide, resume cada
+        bloco (map) e combina (reduce)."""
+        char_budget = int(self._input_token_budget() * _TOKEN_CHARS)
+        chunks = self._split_segments(transcript.segments, char_budget)
+        logger.info(
+            "Transcrição grande para '%s': %d segmentos em %d blocos (map-reduce).",
+            self.provider_name,
+            len(transcript.segments),
+            len(chunks),
+        )
+
+        partials: list[MeetingSummary] = []
+        for i, chunk in enumerate(chunks, 1):
+            chunked_text = self._build_chunked_transcript(
+                chunk, self.config.summary_chunk_minutes
+            )
+            user_prompt = self._build_user_prompt(
+                source_filename, transcript.duration, chunked_text
+            )
+            logger.info("  Resumindo bloco %d/%d (%d segmentos)...", i, len(chunks), len(chunk))
+            partial = self._parse_response(self._call_llm(system_prompt, user_prompt))
+            if partial.executive_summary == _ERROR_SUMMARY:
+                logger.warning("  Bloco %d não pôde ser resumido; ignorando.", i)
+                continue
+            partials.append(partial)
+
+        return self._reduce_partials(partials)
 
     def _reduce_partials(self, partials: list[MeetingSummary]) -> MeetingSummary:
         """Combina resumos parciais: listas no código, narrativa via LLM."""
