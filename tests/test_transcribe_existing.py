@@ -65,7 +65,7 @@ def test_transcribe_existing_overwrites_and_logs(config, tmp_path, monkeypatch):
 
     class _FakeTranscriber:
         def __init__(self, *a, **k): ...
-        def transcribe(self, audio_path, progress_callback=None):
+        def transcribe(self, audio_path, progress_callback=None, **kwargs):
             return new_transcript
 
     monkeypatch.setattr("meeting_processor.pipeline.WhisperTranscriber", lambda cfg: _FakeTranscriber())

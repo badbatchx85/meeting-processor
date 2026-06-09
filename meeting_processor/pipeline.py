@@ -14,7 +14,7 @@ from .kanban import KanbanManager
 from .models import MeetingSummary, ProcessingResult, Transcript
 from .note_generator import NoteGenerator
 from .summarizer import MeetingSummarizer
-from .transcriber import WhisperTranscriber
+from .transcriber import WhisperTranscriber, select_whisper_model
 from .utils import format_duration
 from .wiki_integrator import WikiIntegrator
 
@@ -65,6 +65,21 @@ class MeetingPipeline:
         self.wiki = WikiIntegrator(config)
         self.dashboard = Dashboard(config)
 
+    def _effective_whisper_model(self, audio_path: Path) -> str:
+        """Modelo Whisper para esta transcrição: fixo, ou adaptativo pela duração."""
+        if not self.config.whisper_adaptive:
+            return self.config.whisper_model
+        duration_s = get_duration(audio_path)
+        chosen = select_whisper_model(duration_s, self.config.whisper_model)
+        if chosen != self.config.whisper_model:
+            logger.info(
+                "Adaptativo: áudio %s → Whisper '%s' (configurado '%s').",
+                format_duration(duration_s),
+                chosen,
+                self.config.whisper_model,
+            )
+        return chosen
+
     def process(self, video_path: Path, transcript_only: bool = False) -> ProcessingResult:
         """Processa um arquivo de vídeo de reunião completo.
 
@@ -109,10 +124,13 @@ class MeetingPipeline:
 
             # Etapa 2: Transcrever (sempre)
             logger.info("[2] Transcrevendo audio com Whisper...")
-            job.advance("transcription", f"Modelo: {self.config.whisper_model}")
+            whisper_model = self._effective_whisper_model(audio_path)
+            job.advance("transcription", f"Modelo: {whisper_model}")
             job.set_progress("transcription", 5, "Carregando modelo...")
             self.dashboard.update(job)
-            transcript = self.transcriber.transcribe(audio_path, progress_callback=self._make_progress_cb(job))
+            transcript = self.transcriber.transcribe(
+                audio_path, progress_callback=self._make_progress_cb(job), model=whisper_model
+            )
             duration_str = format_duration(transcript.duration)
             job.set_progress("transcription", 100, f"{len(transcript.segments)} segmentos, {duration_str}")
             self.dashboard.update(job)
@@ -341,11 +359,12 @@ class MeetingPipeline:
         audio_path = extract_audio(source, self.config)
         try:
             job.set_progress("audio", 100)
-            job.advance("transcription", f"Modelo: {self.config.whisper_model}")
+            whisper_model = self._effective_whisper_model(audio_path)
+            job.advance("transcription", f"Modelo: {whisper_model}")
             job.set_progress("transcription", 5, "Carregando modelo...")
             self.dashboard.update(job)
             transcript = self.transcriber.transcribe(
-                audio_path, progress_callback=self._make_progress_cb(job)
+                audio_path, progress_callback=self._make_progress_cb(job), model=whisper_model
             )
             paths = self.note_generator.paths_for_existing(meeting_dir)
             self.note_generator.write_transcription(transcript, paths)

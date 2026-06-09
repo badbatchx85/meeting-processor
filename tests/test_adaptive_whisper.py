@@ -65,3 +65,36 @@ def test_transcribe_uses_model_override(config, monkeypatch):
 
     tr.transcribe(Path("/tmp/does-not-exist.wav"))
     assert calls[-1] == "large"         # sem override => config.whisper_model
+
+
+# --- Task 4: helper do pipeline --------------------------------------------
+
+
+def test_effective_model_adaptive_long(config, monkeypatch):
+    import meeting_processor.pipeline as pipemod
+    from meeting_processor.pipeline import MeetingPipeline
+
+    config.whisper_adaptive = True
+    config.whisper_model = "large"
+    monkeypatch.setattr(pipemod, "get_duration", lambda p: 3000.0)   # 50 min
+    assert MeetingPipeline(config)._effective_whisper_model(Path("/tmp/x.wav")) == "small"
+
+
+def test_effective_model_adaptive_short(config, monkeypatch):
+    import meeting_processor.pipeline as pipemod
+    from meeting_processor.pipeline import MeetingPipeline
+
+    config.whisper_adaptive = True
+    config.whisper_model = "large"
+    monkeypatch.setattr(pipemod, "get_duration", lambda p: 600.0)    # 10 min
+    assert MeetingPipeline(config)._effective_whisper_model(Path("/tmp/x.wav")) == "large"
+
+
+def test_effective_model_off_returns_configured(config, monkeypatch):
+    import meeting_processor.pipeline as pipemod
+    from meeting_processor.pipeline import MeetingPipeline
+
+    config.whisper_adaptive = False
+    config.whisper_model = "base"
+    monkeypatch.setattr(pipemod, "get_duration", lambda p: 99999.0)
+    assert MeetingPipeline(config)._effective_whisper_model(Path("/tmp/x.wav")) == "base"
