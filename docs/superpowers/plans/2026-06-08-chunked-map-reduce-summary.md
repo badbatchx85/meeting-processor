@@ -277,7 +277,18 @@ def test_input_budget_has_floor_for_tiny_context():
 Run: `.venv/bin/python -m pytest tests/test_summary_chunking.py -q`
 Expected: FAIL (`AttributeError: ... has no attribute '_estimate_tokens'` / `context_token_budget`).
 
-- [ ] **Step 3: Implement the primitives.** Add to `_BaseSummarizer` (e.g. just after `__init__`):
+- [ ] **Step 3: Implement the primitives.** First add the two module constants just after `_ERROR_SUMMARY` (near `SYSTEM_PROMPT`):
+
+```python
+# Estimativa de tokens: chars/_TOKEN_CHARS. Medido em PT + timestamps markdown
+# (~2.5 chars/token). Conservador de propósito (superestima) para fragmentar um
+# pouco antes em vez de estourar a janela de contexto.
+_TOKEN_CHARS = 2.5
+# Margem de segurança (tokens) reservada além do system prompt e da saída.
+_BUDGET_MARGIN = 512
+```
+
+Then add to `_BaseSummarizer` (e.g. just after `__init__`):
 
 ```python
     @property
