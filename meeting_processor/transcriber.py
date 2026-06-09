@@ -14,6 +14,24 @@ from .utils import parse_timestamp
 
 logger = logging.getLogger(__name__)
 
+# Duração do áudio (s) -> modelo Whisper, no modo adaptativo. Acima do último
+# limite, usa "small". Limites medidos no benchmark de qualidade/velocidade.
+_ADAPTIVE_TIERS: tuple[tuple[int, str], ...] = ((20 * 60, "large"), (45 * 60, "medium"))
+
+
+def select_whisper_model(duration_s: float, configured_model: str) -> str:
+    """Escolhe o modelo Whisper pela duração do áudio (modo adaptativo).
+
+    Duração desconhecida (<= 0, ex.: ffprobe falhou) mantém o modelo configurado
+    — não degradamos a qualidade sem saber o tamanho.
+    """
+    if duration_s <= 0:
+        return configured_model
+    for limit, model in _ADAPTIVE_TIERS:
+        if duration_s <= limit:
+            return model
+    return "small"
+
 
 def _debug_logger(config: Settings) -> logging.Logger:
     """Logger dedicado que grava ``whisper-debug.log`` na raiz do projeto.
