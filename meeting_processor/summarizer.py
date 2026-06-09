@@ -240,6 +240,31 @@ class _BaseSummarizer:
         return "\n".join(lines)
 
     @staticmethod
+    def _split_segments(
+        segments: list[TranscriptSegment], char_budget: int
+    ) -> list[list[TranscriptSegment]]:
+        """Agrupa segmentos sequenciais em blocos sob ``char_budget`` chars.
+
+        Nunca divide um segmento; um segmento maior que o orçamento vira um
+        bloco sozinho. ``+ 32`` por segmento aproxima o overhead do timestamp
+        markdown adicionado por ``_build_chunked_transcript``.
+        """
+        chunks: list[list[TranscriptSegment]] = []
+        current: list[TranscriptSegment] = []
+        current_len = 0
+        for seg in segments:
+            seg_len = len(seg.text) + 32
+            if current and current_len + seg_len > char_budget:
+                chunks.append(current)
+                current = []
+                current_len = 0
+            current.append(seg)
+            current_len += seg_len
+        if current:
+            chunks.append(current)
+        return chunks
+
+    @staticmethod
     def _extract_json(response_text: str) -> dict | None:
         """Extrai um objeto JSON da resposta do LLM, ou ``None`` se não houver.
 

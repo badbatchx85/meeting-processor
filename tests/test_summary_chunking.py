@@ -129,3 +129,30 @@ def test_input_budget_reserves_system_and_output():
 
 def test_input_budget_has_floor_for_tiny_context():
     assert FakeSummarizer(_cfg(), budget=100)._input_token_budget() == 1000
+
+
+# --- Task 4: divisão em blocos ---------------------------------------------
+
+
+def test_split_preserves_all_segments_in_order():
+    s = FakeSummarizer(_cfg(), budget=16384)
+    segs = _segments(10)
+    chunks = s._split_segments(segs, char_budget=200)
+    flat = [seg for chunk in chunks for seg in chunk]
+    assert flat == segs
+    assert len(chunks) > 1
+
+
+def test_split_respects_char_budget_except_single_segment():
+    s = FakeSummarizer(_cfg(), budget=16384)
+    segs = _segments(10)
+    budget = 200
+    for chunk in s._split_segments(segs, char_budget=budget):
+        total = sum(len(seg.text) + 32 for seg in chunk)
+        assert len(chunk) == 1 or total <= budget
+
+
+def test_split_single_chunk_when_under_budget():
+    s = FakeSummarizer(_cfg(), budget=16384)
+    segs = _segments(3)
+    assert len(s._split_segments(segs, char_budget=100_000)) == 1
