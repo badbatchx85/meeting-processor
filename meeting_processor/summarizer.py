@@ -104,11 +104,15 @@ Responda APENAS com JSON válido, sem markdown, sem blocos de código:
 
 {
   "executive_summary": "Resumo executivo unificado de 3-5 frases cobrindo a reunião inteira",
-  "purpose": "Uma frase com o objetivo central da reunião, ou string vazia"
+  "purpose": "Uma frase com o objetivo central da reunião, ou string vazia",
+  "decisions": ["Decisões efetivamente tomadas, unificadas — funda duplicatas semânticas"],
+  "open_questions": ["Perguntas/riscos/bloqueios em aberto, unificados sem duplicatas"]
 }
 
 Regras:
 - Una as ideias dos trechos sem repetição; produza UM resumo executivo fluido.
+- Em "decisions" e "open_questions", funda itens que dizem a mesma coisa com
+  palavras diferentes (ex.: "Orçamento aprovado" == "Aprovado o orçamento").
 - Não invente informação que não esteja nos resumos parciais.\
 """
 
@@ -384,16 +388,16 @@ class _BaseSummarizer:
                 out.append(ai)
         return out
 
-    def _reduce_narrative(self, partials: list[MeetingSummary]) -> tuple[str, str]:
-        """Sintetiza executive_summary + purpose via uma chamada LLM 'reduce'.
-
-        Em qualquer falha (sem JSON, erro de chamada), cai para a concatenação
-        dos resumos parciais — nunca perde conteúdo.
-        """
+    def _reduce_narrative(self, partials: list[MeetingSummary]) -> tuple[str, str, list[str], list[str]]:
+        """Sintetiza executive_summary + purpose + decisions + open_questions via
+        uma chamada LLM 'reduce'. Em qualquer falha, cai para concatenação /
+        união programática — nunca perde conteúdo."""
         fallback_summary = "\n\n".join(
             p.executive_summary for p in partials if p.executive_summary
         )
         fallback_purpose = next((p.purpose for p in partials if p.purpose), "")
+        fallback_decisions = self._dedupe_strings([d for p in partials for d in p.decisions])
+        fallback_questions = self._dedupe_strings([q for p in partials for q in p.open_questions])
 
         blocks = []
         for i, p in enumerate(partials, 1):
@@ -402,6 +406,8 @@ class _BaseSummarizer:
                 parts.append("Tópicos: " + ", ".join(p.key_topics))
             if p.decisions:
                 parts.append("Decisões: " + "; ".join(p.decisions))
+            if p.open_questions:
+                parts.append("Questões: " + "; ".join(p.open_questions))
             blocks.append("\n".join(parts))
         user_prompt = "Resumos parciais (em ordem):\n\n" + "\n\n".join(blocks)
 
@@ -412,12 +418,14 @@ class _BaseSummarizer:
             return (
                 data.get("executive_summary") or fallback_summary,
                 data.get("purpose") or fallback_purpose,
+                [str(x) for x in self._as_list(data.get("decisions"))] or fallback_decisions,
+                [str(x) for x in self._as_list(data.get("open_questions"))] or fallback_questions,
             )
         except Exception as e:  # noqa: BLE001 — degradação graciosa
             logger.warning(
-                "Reduce do resumo falhou (%s); usando concatenação dos parciais.", e
+                "Reduce do resumo falhou (%s); usando concatenação/união dos parciais.", e
             )
-            return fallback_summary, fallback_purpose
+            return fallback_summary, fallback_purpose, fallback_decisions, fallback_questions
 
     def _map_reduce_summarize(
         self, transcript: Transcript, source_filename: str, system_prompt: str
@@ -455,7 +463,7 @@ class _BaseSummarizer:
         if not partials:
             return self._empty_summary()
 
-        executive_summary, purpose = self._reduce_narrative(partials)
+        executive_summary, purpose, decisions, open_questions = self._reduce_narrative(partials)
         return MeetingSummary(
             executive_summary=executive_summary,
             time_windows=[tw for p in partials for tw in p.time_windows],
@@ -468,10 +476,8 @@ class _BaseSummarizer:
             key_topics=self._dedupe_strings([x for p in partials for x in p.key_topics]),
             purpose=purpose,
             meeting_type=next((p.meeting_type for p in partials if p.meeting_type), ""),
-            decisions=self._dedupe_strings([x for p in partials for x in p.decisions]),
-            open_questions=self._dedupe_strings(
-                [x for p in partials for x in p.open_questions]
-            ),
+            decisions=decisions,
+            open_questions=open_questions,
         )
 
 # ---------------------------------------------------------------------------

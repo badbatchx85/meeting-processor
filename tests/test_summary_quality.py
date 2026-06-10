@@ -84,3 +84,44 @@ def test_gemini_passes_temperature(config, monkeypatch):
     monkeypatch.setattr(httpx.Client, "post", _fake_post_capturing(captured))
     GeminiSummarizer(config)._call_llm("sys", "usr")
     assert captured["generationConfig"]["temperature"] == 0.3
+
+
+# --- Task 3: smarter reduce ------------------------------------------------
+
+from meeting_processor.models import MeetingSummary
+from meeting_processor.summarizer import _BaseSummarizer as _B
+
+
+class _ReduceFake(_B):
+    provider_name = "fake"
+    def __init__(self, config, reduce_response):
+        super().__init__(config)
+        self._r = reduce_response
+    def _call_llm(self, system_prompt, user_prompt):
+        return self._r
+
+
+def _partials():
+    return [
+        MeetingSummary(executive_summary="A", time_windows=[], action_items=[],
+                       participants=[], key_topics=[], decisions=["Aprovado o orçamento"],
+                       open_questions=["Quem assume o deploy?"]),
+        MeetingSummary(executive_summary="B", time_windows=[], action_items=[],
+                       participants=[], key_topics=[], decisions=["Orçamento aprovado"],
+                       open_questions=[]),
+    ]
+
+
+def test_reduce_uses_llm_decisions_and_questions(config):
+    rr = json.dumps({"executive_summary": "RES", "purpose": "P",
+                     "decisions": ["Orçamento aprovado"], "open_questions": ["Quem assume o deploy?"]})
+    out = _ReduceFake(config, rr)._reduce_partials(_partials())
+    assert out.decisions == ["Orçamento aprovado"]
+    assert out.open_questions == ["Quem assume o deploy?"]
+    assert out.executive_summary == "RES"
+
+
+def test_reduce_falls_back_on_bad_json(config):
+    out = _ReduceFake(config, "desculpe, não consegui")._reduce_partials(_partials())
+    assert set(out.decisions) == {"Aprovado o orçamento", "Orçamento aprovado"}
+    assert out.open_questions == ["Quem assume o deploy?"]
