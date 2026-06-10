@@ -126,7 +126,7 @@ Regras:
 class SummarizerProtocol(Protocol):
     """Interface comum entre os provedores de LLM."""
 
-    def summarize(self, transcript: Transcript, source_filename: str) -> MeetingSummary:
+    def summarize(self, transcript: Transcript, source_filename: str, style: str | None = None) -> MeetingSummary:
         ...
 
 
@@ -183,7 +183,7 @@ class _BaseSummarizer:
             f"--- TRANSCRIÇÃO ---\n\n{chunked_text}"
         )
 
-    def summarize(self, transcript: Transcript, source_filename: str) -> MeetingSummary:
+    def summarize(self, transcript: Transcript, source_filename: str, style: str | None = None) -> MeetingSummary:
         chunked_text = self._build_chunked_transcript(
             transcript.segments,
             self.config.summary_chunk_minutes,
@@ -196,6 +196,13 @@ class _BaseSummarizer:
         system_prompt = SYSTEM_PROMPT.replace(
             "{chunk_minutes}", str(self.config.summary_chunk_minutes)
         )
+
+        effective_style = (style or self.config.summary_style or "timeline")
+        if effective_style == "plain":
+            system_prompt += (
+                "\n\nMODO RESUMO SIMPLES: NÃO segmente o resumo por blocos de "
+                'tempo — retorne "time_windows": [] (lista vazia).'
+            )
 
         if self._estimate_tokens(user_prompt) <= self._input_token_budget():
             logger.info(

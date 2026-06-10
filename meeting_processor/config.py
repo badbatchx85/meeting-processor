@@ -92,6 +92,8 @@ class Settings(BaseModel):
 
     # Comum a todos os provedores
     summary_chunk_minutes: int = 5
+    # Estilo do resumo: "timeline" (com blocos de tempo) ou "plain" (sem).
+    summary_style: str = "timeline"
     max_tokens_summary: int = 4096
 
     # Jobs simultâneos de processamento. MANTENHA EM 1: a serialização de slot
@@ -218,6 +220,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_OLLAMA_BASE_URL": "ollama_base_url",
         "MEETING_OLLAMA_MODEL": "ollama_model",
         "MEETING_CONTEXT": "meeting_context",
+        "MEETING_SUMMARY_STYLE": "summary_style",
     }
     for env_key, config_key in string_overrides.items():
         env_val = os.environ.get(env_key)
