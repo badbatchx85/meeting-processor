@@ -125,3 +125,35 @@ def test_reduce_falls_back_on_bad_json(config):
     out = _ReduceFake(config, "desculpe, não consegui")._reduce_partials(_partials())
     assert set(out.decisions) == {"Aprovado o orçamento", "Orçamento aprovado"}
     assert out.open_questions == ["Quem assume o deploy?"]
+
+
+# --- Task 4: meeting context (backend) -------------------------------------
+
+from meeting_processor.web.runtime import set_meeting_context
+
+
+def test_build_user_prompt_includes_context_when_set(config):
+    config.meeting_context = "Projeto X | Ana, Bruno"
+    s = _BaseSummarizer(config)
+    p = s._build_user_prompt("a.mp4", 60.0, "transcript")
+    assert "CONTEXTO DA REUNIÃO" in p and "Projeto X" in p
+
+
+def test_build_user_prompt_no_block_when_empty(config):
+    config.meeting_context = ""
+    s = _BaseSummarizer(config)
+    assert "CONTEXTO DA REUNIÃO" not in s._build_user_prompt("a.mp4", 60.0, "t")
+
+
+def test_set_meeting_context_roundtrips_via_file(config, monkeypatch):
+    monkeypatch.delenv("MEETING_CONTEXT", raising=False)
+    set_meeting_context(config, "Glossário: PO=Product Owner")
+    from pathlib import Path
+    assert (Path(config.project_root) / ".meeting-context.txt").read_text(encoding="utf-8") == "Glossário: PO=Product Owner"
+    assert config.meeting_context == "Glossário: PO=Product Owner"
+
+
+def test_config_meeting_context_endpoint(client, config):
+    r = client.post("/api/config/meeting-context", json={"context": "abc"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert client.get("/api/config").json()["meeting_context"] == "abc"

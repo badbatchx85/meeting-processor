@@ -76,6 +76,11 @@ class Settings(BaseModel):
     openai_temperature: float = 0.3
     gemini_temperature: float = 0.3
 
+    # Contexto global da reunião injetado no prompt do resumo.
+    # Texto livre (multi-linha): nomes de participantes, siglas, glossário, etc.
+    # Persiste em .meeting-context.txt (não no .env — suporta multi-linha).
+    meeting_context: str = ""
+
     # Ollama (LLM local)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:14b"
@@ -212,6 +217,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_GEMINI_MODEL": "gemini_model",
         "MEETING_OLLAMA_BASE_URL": "ollama_base_url",
         "MEETING_OLLAMA_MODEL": "ollama_model",
+        "MEETING_CONTEXT": "meeting_context",
     }
     for env_key, config_key in string_overrides.items():
         env_val = os.environ.get(env_key)
@@ -267,6 +273,11 @@ def load_config(config_path: str | None = None) -> Settings:
         "GEMINI_API_KEY", os.environ.get("GOOGLE_API_KEY", "")
     )
     config_data["project_root"] = str(project_root)
+
+    # Contexto da reunião: arquivo dedicado (multi-linha); env tem precedência.
+    ctx_file = project_root / ".meeting-context.txt"
+    if not config_data.get("meeting_context") and ctx_file.exists():
+        config_data["meeting_context"] = ctx_file.read_text(encoding="utf-8")
 
     # Default portável para a pasta monitorada: ~/Videos/OBS.
     # Funciona em Windows, macOS e Linux sem caminho hardcoded.

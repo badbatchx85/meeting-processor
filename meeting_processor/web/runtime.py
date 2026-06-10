@@ -328,6 +328,23 @@ def set_pipeline_steps(
     return {"ok": True, "steps": config.steps(), "watcher_restart_needed": True}
 
 
+def set_meeting_context(config: Settings, text: str) -> dict:
+    """Salva o contexto global da reunião em ``.meeting-context.txt``.
+
+    Texto livre (possivelmente multi-linha) injetado no prompt do resumo.
+    Texto vazio remove o arquivo.
+    """
+    text = text or ""
+    path = Path(config.project_root) / ".meeting-context.txt"
+    if text.strip():
+        path.write_text(text, encoding="utf-8")
+    elif path.exists():
+        path.unlink()
+    config.meeting_context = text
+    logger.info("Contexto da reunião atualizado (%d chars).", len(text))
+    return {"ok": True}
+
+
 def set_watch_dir(config: Settings, watch_dir: str) -> dict:
     """Altera a pasta monitorada (OBS) em runtime e persiste no ``.env``.
 

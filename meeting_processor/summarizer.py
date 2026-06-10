@@ -80,6 +80,7 @@ Regras:
 - Extraia TODAS as tarefas, ações e compromissos mencionados, mesmo os implícitos.
 - "open_questions" lista perguntas/riscos/bloqueios levantados e não resolvidos; use lista vazia se não houver.
 - Se não conseguir identificar participantes pelo nome, use "Participante 1", etc.
+- Se um CONTEXTO DA REUNIÃO for fornecido, use-o para grafar corretamente os nomes dos participantes e os termos/siglas técnicos.
 - Se não houver tarefas, retorne uma lista vazia para action_items.
 - Tópicos principais devem ser 3-5 temas centrais discutidos.\
 """
@@ -172,10 +173,11 @@ class _BaseSummarizer:
 
     # API pública -----------------------------------------------------------
 
-    def _build_user_prompt(
-        self, source_filename: str, duration: float, chunked_text: str
-    ) -> str:
+    def _build_user_prompt(self, source_filename: str, duration: float, chunked_text: str) -> str:
+        context = (self.config.meeting_context or "").strip()
+        context_block = f"--- CONTEXTO DA REUNIÃO ---\n{context}\n\n" if context else ""
         return (
+            f"{context_block}"
             f"Arquivo de origem: {source_filename}\n"
             f"Duração total: {format_duration(duration)}\n\n"
             f"--- TRANSCRIÇÃO ---\n\n{chunked_text}"

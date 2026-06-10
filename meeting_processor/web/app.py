@@ -33,6 +33,7 @@ from .runtime import (
     set_llm_key,
     set_llm_model,
     set_llm_provider,
+    set_meeting_context,
     set_pipeline_steps,
     set_watch_dir,
 )
@@ -1436,6 +1437,7 @@ def create_app(config: Settings | None = None) -> FastAPI:
     async def api_get_config():
         return {
             "watch_dir": config.watch_dir,
+            "meeting_context": config.meeting_context,
             "steps": {
                 "summary": config.enable_summary,
                 "note": config.enable_note,
@@ -1456,6 +1458,11 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if supervisor.is_running():
             supervisor.restart()
         return {"ok": True, "exists": result["exists"], "watch_dir": config.watch_dir}
+
+    @app.post("/api/config/meeting-context")
+    async def api_set_meeting_context(payload: dict):
+        set_meeting_context(config, (payload or {}).get("context", ""))
+        return {"ok": True}
 
     @app.post("/api/config/steps")
     async def api_set_steps(payload: dict):
