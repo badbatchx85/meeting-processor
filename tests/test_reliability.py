@@ -103,3 +103,27 @@ def test_executor_serializes_jobs():
         f.result()
     ex.shutdown()
     assert overlap["max"] == 1   # never two at once
+
+
+# --- Task 5: cooperative cancel --------------------------------------------
+
+import threading
+
+
+def test_cancel_event_aborts_pipeline(config, monkeypatch, tmp_path):
+    from meeting_processor.models import Transcript, TranscriptSegment
+    monkeypatch.setattr(pipemod, "extract_audio", lambda *a, **k: tmp_path / "a.wav")
+    monkeypatch.setattr(pipemod.shutil, "disk_usage", lambda p: type("D", (), {"free": 10**12})())
+    seg = TranscriptSegment(start=0.0, end=1.0, text="oi")
+    fake_tr = Transcript(segments=[seg], full_text="oi", language="pt", duration=1.0)
+    ev = threading.Event()
+    ev.set()   # cancel before the first checkpoint fires
+    video = tmp_path / "reuniao.mp4"
+    video.write_bytes(b"x")
+    pipe = MeetingPipeline(config)
+    pipe.transcriber = type("T", (), {"transcribe": staticmethod(lambda *a, **k: fake_tr)})()
+    with pytest.raises(Exception):
+        pipe.process(video, cancel_event=ev)
+    entry = [e for e in json.loads((config.vault_path / "wiki" / ".processing-history.json").read_text()) if e["file"] == "reuniao.mp4"][-1]
+    assert entry["status"] == "error"
+    assert "Cancelado" in (entry.get("error_message") or "")

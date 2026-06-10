@@ -11,6 +11,7 @@ from .audio import extract_audio, get_duration
 from .config import Settings
 from . import generation_log
 from .dashboard import Dashboard
+from .job_control import JobCancelled
 from .kanban import KanbanManager
 from .models import MeetingSummary, ProcessingResult, Transcript
 from .note_generator import NoteGenerator
@@ -82,6 +83,10 @@ class MeetingPipeline:
             )
         return chosen
 
+    def _check_cancel(self) -> None:
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            raise JobCancelled("Cancelado pelo usuário.")
+
     def process(self, video_path: Path, transcript_only: bool = False,
                 job_started=None, cancel_event=None) -> ProcessingResult:
         """Processa um arquivo de vídeo de reunião completo.
@@ -132,9 +137,11 @@ class MeetingPipeline:
             job.set_progress("audio", 10)
             self.dashboard.update(job)
             audio_path = extract_audio(video_path, self.config)
+            self._check_cancel()
             size_mb = audio_path.stat().st_size / 1_048_576
             job.set_progress("audio", 100, f"{size_mb:.1f} MB extraidos")
             self.dashboard.update(job)
+            self._check_cancel()
 
             # Etapa 2: Transcrever (sempre)
             logger.info("[2] Transcrevendo audio com Whisper...")
@@ -148,6 +155,7 @@ class MeetingPipeline:
             duration_str = format_duration(transcript.duration)
             job.set_progress("transcription", 100, f"{len(transcript.segments)} segmentos, {duration_str}")
             self.dashboard.update(job)
+            self._check_cancel()
 
             # Salvar transcrição no vault (sempre)
             paths = self.note_generator.prepare(video_path.name, created_at)
@@ -157,6 +165,7 @@ class MeetingPipeline:
             summary = self._summarize(
                 transcript, paths, video_path.name, created_at, job, steps
             )
+            self._check_cancel()
             note_path = (
                 str(paths.note_path) if summary is not None and steps["note"] else ""
             )
@@ -321,6 +330,7 @@ class MeetingPipeline:
             job.set_progress(key, 100)
         started = datetime.now()
         try:
+            self._check_cancel()
             self._summarize(transcript, paths, meeting_id, created_at, job, steps)
             job.complete("resumo gerado a partir da transcrição")
             self.dashboard.update(job)
@@ -382,6 +392,7 @@ class MeetingPipeline:
             transcript = self.transcriber.transcribe(
                 audio_path, progress_callback=self._make_progress_cb(job), model=whisper_model
             )
+            self._check_cancel()
             paths = self.note_generator.paths_for_existing(meeting_dir)
             self.note_generator.write_transcription(transcript, paths)
             detail = f"{len(transcript.segments)} segmentos, {format_duration(transcript.duration)}"

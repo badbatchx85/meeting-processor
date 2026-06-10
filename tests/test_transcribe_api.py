@@ -22,7 +22,7 @@ def test_transcribe_endpoint_queues(client, config, monkeypatch):
     called = {"id": None}
     monkeypatch.setattr(
         "meeting_processor.pipeline.MeetingPipeline.transcribe_existing",
-        lambda self, meeting_id: called.__setitem__("id", meeting_id),
+        lambda self, meeting_id, **kwargs: called.__setitem__("id", meeting_id),
     )
     r = client.post(f"/api/meetings/{mid}/transcribe")
     assert r.status_code == 200 and r.json()["queued"] is True
@@ -83,7 +83,7 @@ def test_process_transcript_mode(client, config, tmp_path, monkeypatch):
     seen = {}
     monkeypatch.setattr(
         "meeting_processor.pipeline.MeetingPipeline.process",
-        lambda self, path, transcript_only=False: seen.update(to=transcript_only),
+        lambda self, path, transcript_only=False, **kwargs: seen.update(to=transcript_only),
     )
     r = client.post("/api/process", json={"file": str(media), "mode": "transcript"})
     assert r.status_code == 200 and r.json()["queued"] is True

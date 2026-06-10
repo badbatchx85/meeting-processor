@@ -1509,11 +1509,17 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
     @app.post("/api/process/cancel")
     async def api_cancel_job(payload: dict):
-        """Destrava um job preso, marcando-o como erro no histórico."""
+        """Cancela um job: para a execução (ou tira da fila) e marca o histórico."""
         p = payload or {}
-        result = _cancel_active_job(
-            config.vault_path, p.get("file", ""), p.get("started") or None
-        )
+        file_name = p.get("file", "")
+        started = p.get("started") or None
+        if started is not None:
+            entry = cancel_registry.lookup(file_name, started)
+            if entry is not None:
+                future, event = entry
+                if not future.cancel():     # já rodando → sinaliza parada cooperativa
+                    event.set()
+        result = _cancel_active_job(config.vault_path, file_name, started)
         if not result["ok"]:
             return JSONResponse(
                 {"ok": False, "error": result.get("error", "Não encontrado")},
