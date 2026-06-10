@@ -85,7 +85,12 @@ class Settings(BaseModel):
     summary_chunk_minutes: int = 5
     max_tokens_summary: int = 4096
 
-    # Jobs simultâneos de processamento (fila de slot único por padrão).
+    # Jobs simultâneos de processamento. MANTENHA EM 1: a serialização de slot
+    # único é uma INVARIANTE de correção, não só de performance — ela evita
+    # duas transcrições competindo por memória E coordena as escritas do
+    # histórico (escrita atômica protege contra corrupção, não contra
+    # lost-update). Valores > 1 são experimentais (registro de cancelamento e
+    # mutações de histórico não são totalmente coordenados entre workers).
     max_concurrent_jobs: int = 1
 
     # ---------------------------------------------------------------
