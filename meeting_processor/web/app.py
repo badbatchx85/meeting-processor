@@ -1462,6 +1462,10 @@ def create_app(config: Settings | None = None) -> FastAPI:
     @app.post("/api/config/meeting-context")
     async def api_set_meeting_context(payload: dict):
         set_meeting_context(config, (payload or {}).get("context", ""))
+        # O watcher roda em outro processo e lê o contexto só no boot; reinicia
+        # para que arquivos auto-processados também usem o novo contexto.
+        if supervisor.is_running():
+            supervisor.restart()
         return {"ok": True}
 
     @app.post("/api/config/steps")

@@ -1,5 +1,6 @@
 # Configuração local / segredos
 .env
+.meeting-context.txt
 .claude/settings.local.json
 
 # Diretórios runtime
