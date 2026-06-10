@@ -19,7 +19,13 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -1278,6 +1284,23 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if src is None:
             return {"exists": False, "name": "", "path": "", "size": None}
         return {"exists": True, "name": src.name, "path": str(src), "size": src.stat().st_size}
+
+    @app.get("/api/meetings/{meeting_id}/media")
+    async def api_meeting_media(meeting_id: str):
+        """Serve o arquivo de origem (vídeo/áudio) com suporte a Range.
+
+        FileResponse do Starlette honra ``Range`` (206), então o player do
+        navegador faz seek sem baixar o arquivo inteiro.
+        """
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        from ..pipeline import locate_source_file
+
+        src = locate_source_file(config, meeting_dir)
+        if src is None or not src.is_file():
+            raise HTTPException(status_code=404, detail="Arquivo de origem indisponível")
+        return FileResponse(src)
 
     @app.delete("/api/meetings/{meeting_id}/source")
     async def api_delete_meeting_source(meeting_id: str):
