@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import (
     FileResponse,
@@ -41,6 +41,7 @@ from .runtime import (
     set_llm_provider,
     set_meeting_context,
     set_pipeline_steps,
+    set_summary_style,
     set_watch_dir,
 )
 from .tasks_export import to_csv, to_json, to_markdown, to_txt
@@ -1243,15 +1244,16 @@ def create_app(config: Settings | None = None) -> FastAPI:
         )
 
     @app.post("/api/meetings/{meeting_id}/summarize")
-    async def api_summarize(meeting_id: str):
+    async def api_summarize(meeting_id: str, payload: dict | None = Body(default=None)):
         meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
         if meeting_dir is None or not meeting_dir.is_dir() or not list(
             meeting_dir.glob("Transcricao - *.md")
         ):
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
 
+        style = (payload or {}).get("style")
         _submit_job(meeting_id, lambda started, ev: MeetingPipeline(config).summarize_existing(
-            meeting_id, job_started=started, cancel_event=ev))
+            meeting_id, job_started=started, cancel_event=ev, style=style))
         return {"ok": True, "queued": True, "meeting_id": meeting_id}
 
     @app.post("/api/meetings/{meeting_id}/transcribe")
@@ -1467,6 +1469,7 @@ def create_app(config: Settings | None = None) -> FastAPI:
         return {
             "watch_dir": config.watch_dir,
             "meeting_context": config.meeting_context,
+            "summary_style": config.summary_style,
             "steps": {
                 "summary": config.enable_summary,
                 "note": config.enable_note,
@@ -1487,6 +1490,11 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if supervisor.is_running():
             supervisor.restart()
         return {"ok": True, "exists": result["exists"], "watch_dir": config.watch_dir}
+
+    @app.post("/api/config/summary-style")
+    async def api_set_summary_style(payload: dict):
+        set_summary_style(config, (payload or {}).get("style", ""))
+        return {"ok": True}
 
     @app.post("/api/config/meeting-context")
     async def api_set_meeting_context(payload: dict):

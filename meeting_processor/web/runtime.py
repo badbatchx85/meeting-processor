@@ -370,3 +370,12 @@ def set_watch_dir(config: Settings, watch_dir: str) -> dict:
         # O watcher subprocess lê a env só ao iniciar.
         "watcher_restart_needed": True,
     }
+
+
+def set_summary_style(config: Settings, style: str) -> dict:
+    """Define o estilo padrão do resumo: 'timeline' (com períodos) ou 'plain'."""
+    value = "plain" if (style or "").strip().lower() == "plain" else "timeline"
+    persist_env_setting(Path(config.project_root), "MEETING_SUMMARY_STYLE", value)
+    config.summary_style = value
+    logger.info("Estilo do resumo: %s", value)
+    return {"ok": True, "summary_style": value}

@@ -70,3 +70,42 @@ def test_summarize_forwards_style(config):
                     {"summary": True, "note": False, "kanban": False, "wiki": False},
                     style="plain")
     assert fake.style == "plain"
+
+
+# --- Task 3: backend endpoints ---------------------------------------------
+
+import threading
+from meeting_processor.web.runtime import set_summary_style
+
+
+def test_set_summary_style_normalizes(config, monkeypatch):
+    monkeypatch.delenv("MEETING_SUMMARY_STYLE", raising=False)
+    set_summary_style(config, "plain")
+    assert config.summary_style == "plain"
+    set_summary_style(config, "lixo")     # invalid → timeline
+    assert config.summary_style == "timeline"
+
+
+def test_config_summary_style_endpoint(client, config):
+    r = client.post("/api/config/summary-style", json={"style": "plain"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert client.get("/api/config").json()["summary_style"] == "plain"
+
+
+def test_summarize_endpoint_passes_style(client, config, monkeypatch):
+    captured = {}
+    done = threading.Event()
+
+    def fake(self, meeting_id, job_started=None, cancel_event=None, style=None):
+        captured["style"] = style
+        done.set()
+
+    monkeypatch.setattr(MeetingPipeline, "summarize_existing", fake)
+    mid = "2026-01-01 10h00 - reu"
+    d = config.reunioes_path / mid
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"Transcricao - {mid}.md").write_text("# Transcricao\n\n**[00:00]** oi\n", encoding="utf-8")
+    r = client.post(f"/api/meetings/{mid}/summarize", json={"style": "plain"})
+    assert r.status_code == 200 and r.json()["queued"] is True
+    assert done.wait(2.0)
+    assert captured["style"] == "plain"
