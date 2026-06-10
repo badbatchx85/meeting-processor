@@ -66,3 +66,40 @@ def test_new_job_accepts_started_at(config):
     ts = datetime(2026, 6, 9, 10, 0, 0)
     job = d.new_job("x.mp4", started_at=ts)
     assert job.started_at == ts
+
+
+# --- Task 4: queue + registry ----------------------------------------------
+
+from meeting_processor.job_control import CancelRegistry, JobCancelled
+
+
+def test_cancel_registry_register_lookup_discard():
+    import threading
+    reg = CancelRegistry()
+    fut, ev = object(), threading.Event()
+    reg.register("a.mp4", "2026-01-01T00:00:00", fut, ev)
+    assert reg.lookup("a.mp4", "2026-01-01T00:00:00") == (fut, ev)
+    reg.discard("a.mp4", "2026-01-01T00:00:00")
+    assert reg.lookup("a.mp4", "2026-01-01T00:00:00") is None
+
+
+def test_executor_serializes_jobs():
+    from concurrent.futures import ThreadPoolExecutor
+    import threading, time
+    ex = ThreadPoolExecutor(max_workers=1)
+    overlap = {"max": 0, "cur": 0}
+    lock = threading.Lock()
+
+    def work():
+        with lock:
+            overlap["cur"] += 1
+            overlap["max"] = max(overlap["max"], overlap["cur"])
+        time.sleep(0.02)
+        with lock:
+            overlap["cur"] -= 1
+
+    futs = [ex.submit(work) for _ in range(4)]
+    for f in futs:
+        f.result()
+    ex.shutdown()
+    assert overlap["max"] == 1   # never two at once

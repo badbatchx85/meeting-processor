@@ -653,9 +653,41 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if supervisor.is_running():
             logger.info("Frontend desligando — parando watcher também.")
             supervisor.stop()
+        job_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title="Meeting Processor", version="1.1.0", lifespan=lifespan)
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+    from concurrent.futures import ThreadPoolExecutor
+    from ..job_control import CancelRegistry
+    from ..pipeline import MeetingPipeline
+
+    job_executor = ThreadPoolExecutor(
+        max_workers=config.max_concurrent_jobs, thread_name_prefix="job"
+    )
+    cancel_registry = CancelRegistry()
+
+    def _submit_job(file_label: str, run_fn) -> None:
+        """Enfileira um job no executor de slot único e registra para cancelamento.
+
+        ``run_fn(started, event)`` roda o pipeline com a identidade
+        ``(file_label, started)`` e o ``Event`` de cancelamento.
+        """
+        started = datetime.now()
+        key = started.isoformat()
+        event = threading.Event()
+
+        def _wrapped():
+            try:
+                run_fn(started, event)
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha no job: %s", file_label)
+            finally:
+                cancel_registry.discard(file_label, key)
+
+        future = job_executor.submit(_wrapped)
+        cancel_registry.register(file_label, key, future, event)
+        logger.info("Job enfileirado: %s", file_label)
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -1054,16 +1086,8 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if not path.exists():
             raise HTTPException(status_code=400, detail=f"Arquivo não encontrado: {file}")
 
-        def _run():
-            try:
-                from ..pipeline import MeetingPipeline
-
-                pipeline = MeetingPipeline(config)
-                pipeline.process(path)
-            except Exception:  # noqa: BLE001
-                logger.exception("Falha ao processar via web")
-
-        threading.Thread(target=_run, daemon=True).start()
+        _submit_job(path.name, lambda started, ev: MeetingPipeline(config).process(
+            path, job_started=started, cancel_event=ev))
         return RedirectResponse(url="/dashboard", status_code=303)
 
     @app.post("/actions/meetings/{meeting_id}/delete")
@@ -1213,15 +1237,8 @@ def create_app(config: Settings | None = None) -> FastAPI:
         ):
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
 
-        def _run():
-            try:
-                from ..pipeline import MeetingPipeline
-
-                MeetingPipeline(config).summarize_existing(meeting_id)
-            except Exception:  # noqa: BLE001
-                logger.exception("Falha ao gerar resumo via API")
-
-        threading.Thread(target=_run, daemon=True).start()
+        _submit_job(meeting_id, lambda started, ev: MeetingPipeline(config).summarize_existing(
+            meeting_id, job_started=started, cancel_event=ev))
         return {"ok": True, "queued": True, "meeting_id": meeting_id}
 
     @app.post("/api/meetings/{meeting_id}/transcribe")
@@ -1230,15 +1247,8 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if meeting_dir is None or not meeting_dir.is_dir():
             raise HTTPException(status_code=404, detail="Reunião não encontrada")
 
-        def _run():
-            try:
-                from ..pipeline import MeetingPipeline
-
-                MeetingPipeline(config).transcribe_existing(meeting_id)
-            except Exception:  # noqa: BLE001
-                logger.exception("Falha ao re-transcrever via API")
-
-        threading.Thread(target=_run, daemon=True).start()
+        _submit_job(meeting_id, lambda started, ev: MeetingPipeline(config).transcribe_existing(
+            meeting_id, job_started=started, cancel_event=ev))
         return {"ok": True, "queued": True, "meeting_id": meeting_id}
 
     @app.get("/api/meetings/{meeting_id}/log")
@@ -1493,15 +1503,8 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
         mode = (payload or {}).get("mode", "full")
 
-        def _run():
-            try:
-                from ..pipeline import MeetingPipeline
-
-                MeetingPipeline(config).process(path, transcript_only=(mode == "transcript"))
-            except Exception:  # noqa: BLE001
-                logger.exception("Falha ao processar via API")
-
-        threading.Thread(target=_run, daemon=True).start()
+        _submit_job(path.name, lambda started, ev: MeetingPipeline(config).process(
+            path, transcript_only=(mode == "transcript"), job_started=started, cancel_event=ev))
         return {"ok": True, "queued": True, "file": str(path)}
 
     @app.post("/api/process/cancel")
@@ -1520,15 +1523,8 @@ def create_app(config: Settings | None = None) -> FastAPI:
 
     def _process_path_async(path: Path, transcript_only: bool = False) -> None:
         """Dispara o pipeline para um arquivo em uma thread daemon."""
-        def _run():
-            try:
-                from ..pipeline import MeetingPipeline
-
-                MeetingPipeline(config).process(path, transcript_only=transcript_only)
-            except Exception:  # noqa: BLE001
-                logger.exception("Falha ao processar arquivo enviado")
-
-        threading.Thread(target=_run, daemon=True).start()
+        _submit_job(path.name, lambda started, ev: MeetingPipeline(config).process(
+            path, transcript_only=transcript_only, job_started=started, cancel_event=ev))
 
     @app.post("/api/process/upload")
     async def api_process_upload(file: UploadFile = File(...), mode: str = "full"):
