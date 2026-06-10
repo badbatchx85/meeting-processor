@@ -85,6 +85,9 @@ class Settings(BaseModel):
     summary_chunk_minutes: int = 5
     max_tokens_summary: int = 4096
 
+    # Jobs simultâneos de processamento (fila de slot único por padrão).
+    max_concurrent_jobs: int = 1
+
     # ---------------------------------------------------------------
     # Etapas do pipeline (áudio + transcrição sempre rodam)
     # ---------------------------------------------------------------
@@ -221,6 +224,7 @@ def load_config(config_path: str | None = None) -> Settings:
 
     int_overrides = {
         "MEETING_OLLAMA_NUM_CTX": "ollama_num_ctx",
+        "MEETING_MAX_CONCURRENT_JOBS": "max_concurrent_jobs",
     }
     for env_key, config_key in int_overrides.items():
         env_val = os.environ.get(env_key)

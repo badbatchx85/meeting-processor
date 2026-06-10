@@ -65,6 +65,7 @@ class MeetingPipeline:
         self.kanban = KanbanManager(config)
         self.wiki = WikiIntegrator(config)
         self.dashboard = Dashboard(config)
+        self._cancel_event = None
 
     def _effective_whisper_model(self, audio_path: Path) -> str:
         """Modelo Whisper para esta transcrição: fixo, ou adaptativo pela duração."""
@@ -81,7 +82,8 @@ class MeetingPipeline:
             )
         return chosen
 
-    def process(self, video_path: Path, transcript_only: bool = False) -> ProcessingResult:
+    def process(self, video_path: Path, transcript_only: bool = False,
+                job_started=None, cancel_event=None) -> ProcessingResult:
         """Processa um arquivo de vídeo de reunião completo.
 
         Atualiza o dashboard no Obsidian a cada etapa para
@@ -93,6 +95,7 @@ class MeetingPipeline:
         Returns:
             ProcessingResult com todos os caminhos e dados gerados.
         """
+        self._cancel_event = cancel_event
         start_time = time.time()
         steps = self.config.steps()
         if transcript_only:
@@ -103,7 +106,7 @@ class MeetingPipeline:
         logger.info("=" * 60)
 
         created_at = datetime.now()
-        job = self.dashboard.new_job(video_path.name)
+        job = self.dashboard.new_job(video_path.name, started_at=job_started)
         for key in ("summary", "note", "kanban", "wiki"):
             if not steps[key]:
                 job.skip(key)
@@ -285,8 +288,9 @@ class MeetingPipeline:
         self.note_generator.write_group_note(paths, has_summary=steps["note"])
         return summary
 
-    def summarize_existing(self, meeting_id: str) -> None:
+    def summarize_existing(self, meeting_id: str, job_started=None, cancel_event=None) -> None:
         """Gera o resumo de uma reunião já transcrita (sem re-transcrever)."""
+        self._cancel_event = cancel_event
         # Defesa contra path traversal: meeting_dir deve ser filho direto de
         # reunioes/ (sem ``..`` nem separadores em meeting_id).
         base = self.config.reunioes_path.resolve()
@@ -311,7 +315,7 @@ class MeetingPipeline:
             "kanban": self.config.enable_kanban,
             "wiki": self.config.enable_wiki,
         }
-        job = self.dashboard.new_job(meeting_id)
+        job = self.dashboard.new_job(meeting_id, started_at=job_started)
         for key in ("audio", "transcription"):
             job.advance(key)
             job.set_progress(key, 100)
@@ -334,13 +338,14 @@ class MeetingPipeline:
             )
             raise
 
-    def transcribe_existing(self, meeting_id: str) -> None:
+    def transcribe_existing(self, meeting_id: str, job_started=None, cancel_event=None) -> None:
         """Re-transcreve uma reunião já existente (só transcrição, sem resumo).
 
         Localiza o arquivo de origem, roda áudio+Whisper, sobrescreve a
         transcrição salva e registra o resultado no log de geração da reunião.
         Se a origem sumiu, registra um erro no log e retorna (sem exceção).
         """
+        self._cancel_event = cancel_event
         base = self.config.reunioes_path.resolve()
         meeting_dir = (base / meeting_id).resolve()
         if meeting_dir.parent != base or not meeting_dir.is_dir():
@@ -361,7 +366,7 @@ class MeetingPipeline:
             return
 
         logger.info("Re-transcrevendo %s (origem: %s)", meeting_id, source.name)
-        job = self.dashboard.new_job(meeting_id)
+        job = self.dashboard.new_job(meeting_id, started_at=job_started)
         for key in ("summary", "note", "kanban", "wiki"):
             job.skip(key)
         job.advance("audio", "Convertendo video para WAV 16kHz")

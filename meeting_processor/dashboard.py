@@ -139,8 +139,8 @@ class Dashboard:
 
     # --- Controle de Jobs ---
 
-    def new_job(self, source_file: str) -> ProcessingJob:
-        job = ProcessingJob(source_file)
+    def new_job(self, source_file: str, started_at: datetime | None = None) -> ProcessingJob:
+        job = ProcessingJob(source_file, started_at=started_at)
         self.jobs.append(job)
         self._render()
         return job
