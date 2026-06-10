@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import unicodedata
 from pathlib import Path
 
 
@@ -59,6 +61,14 @@ def parse_timestamp(ts: str) -> float:
         m, s = parts
         return int(m) * 60 + float(s)
     return 0.0
+
+
+def slugify(name: str) -> str:
+    """Nome de pessoa -> nome de arquivo seguro (sem acento, minúsculo)."""
+    nfkd = unicodedata.normalize("NFD", name or "")
+    ascii_name = "".join(c for c in nfkd if unicodedata.category(c) != "Mn")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+    return slug or "sem-nome"
 
 
 def write_json_atomic(path, data) -> None:
