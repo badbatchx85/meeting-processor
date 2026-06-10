@@ -50,8 +50,13 @@ strip leading/trailing `-`. Empty result → `"sem-nome"`. Examples:
 
 1. `tasks = list_all_tasks(config.reunioes_path)` (import from
    `meeting_processor.web.tasks_io`).
-2. Keep **open** tasks: `[t for t in tasks if not t.done]` (a card's `done` is set
-   from its column being the DONE column; `not done` == not completed).
+2. Keep **open** tasks:
+   `[t for t in tasks if not t.done and t.column != COLUMN_DONE]`
+   (import `COLUMN_DONE` from `tasks_io`). A task is "done" if its checkbox is
+   `[x]` (`TaskCard.done`) **or** it sits in the Done column. Both must be
+   excluded: `move_task` moves a card to the Done column without flipping the
+   checkbox, so the column check is what makes a UI move-to-Done drop the task
+   from the rollup, while the `done` check catches a manually-checked `[x]`.
 3. Group by assignee: `assignee = (t.assignee or "").strip() or "Sem responsável"`
    — unassigned open tasks collect under "Sem responsável" so they surface.
 4. **Fully manage `pessoas_dir = config.vault_path / "wiki" / "pessoas"`**: create
