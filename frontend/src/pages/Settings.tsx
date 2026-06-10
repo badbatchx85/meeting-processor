@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/Toast";
-import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus, useStartOllama } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus, useStartOllama, useSetMeetingContext } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import type { Llm, Steps } from "../api/types";
 
@@ -49,10 +49,12 @@ export function Settings() {
   const setModel = useSetModel();
   const setKey = useSetKey();
   const setWatchDir = useSetWatchDir();
+  const setCtx = useSetMeetingContext();
   const setSteps = useSetSteps();
   const toast = useToast();
 
   const [watchDir, setWatchDirValue] = useState("");
+  const [meetingContext, setMeetingContext] = useState("");
   const [steps, setStepsValue] = useState<Steps>({ summary: true, note: true, kanban: true, wiki: true });
   const [model, setModelValue] = useState("");
   const [custom, setCustom] = useState(false);
@@ -62,6 +64,7 @@ export function Settings() {
   useEffect(() => {
     if (config.data) {
       setWatchDirValue(config.data.watch_dir ?? "");
+      setMeetingContext(config.data.meeting_context ?? "");
       setStepsValue(config.data.steps);
     }
   }, [config.data]);
@@ -292,6 +295,21 @@ export function Settings() {
             className="rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark">Salvar</button>
         </div>
       </Card>
+
+      {config.data && (
+      <Card title="Contexto da reunião" eyebrow="LLM" index="B2">
+        <div className="flex flex-col gap-2">
+          <textarea aria-label="Contexto da reunião" value={meetingContext}
+            onChange={(e) => setMeetingContext(e.target.value)} rows={4}
+            placeholder="Projeto, participantes habituais, siglas/glossário…"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm" />
+          <button onClick={() => setCtx.mutate(meetingContext, { onSuccess: () => toast("ok", "Contexto salvo."), onError })}
+            className="w-fit rounded-lg bg-brand px-3 py-2 text-sm text-white hover:bg-brand-dark">
+            Salvar contexto
+          </button>
+        </div>
+      </Card>
+      )}
 
       <Card title="Etapas do processamento" eyebrow="Pipeline" index="C">
         <div className="flex flex-col gap-2">

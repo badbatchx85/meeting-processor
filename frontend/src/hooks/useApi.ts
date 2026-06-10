@@ -143,6 +143,14 @@ export function useSetWatchDir() {
   });
 }
 
+export function useSetMeetingContext() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (context: string) => api.post("/api/config/meeting-context", { context }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["config"] }),
+  });
+}
+
 export function useProcessFile() {
   const qc = useQueryClient();
   return useMutation({

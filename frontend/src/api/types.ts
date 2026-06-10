@@ -42,7 +42,7 @@ export interface JobProgress {
   stages: StageStep[];
 }
 export interface StatusResponse { watcher_alive: boolean; active: JobProgress[]; }
-export interface Config { watch_dir: string; steps: Steps; }
+export interface Config { watch_dir: string; steps: Steps; meeting_context: string; }
 export interface LocalModels { ollama_running: boolean; ollama_installed: boolean; installed: string[]; suggested: string[]; }
 export interface PullStatus { model?: string; percent?: number; status?: string; done?: boolean; error?: string | null; }
 export interface GenerationLogEntry {
