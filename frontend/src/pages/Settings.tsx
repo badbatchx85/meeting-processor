@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "../components/Card";
 import { PageHeader } from "../components/PageHeader";
 import { useToast } from "../components/Toast";
-import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus, useStartOllama, useSetMeetingContext } from "../hooks/useApi";
+import { useConfig, useLlm, useSetProvider, useSetModel, useSetKey, useSetWatchDir, useSetSteps, useLocalModels, usePullModel, usePullStatus, useStartOllama, useSetMeetingContext, useSetSummaryStyle } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import type { Llm, Steps } from "../api/types";
 
@@ -50,11 +50,13 @@ export function Settings() {
   const setKey = useSetKey();
   const setWatchDir = useSetWatchDir();
   const setCtx = useSetMeetingContext();
+  const setStyle = useSetSummaryStyle();
   const setSteps = useSetSteps();
   const toast = useToast();
 
   const [watchDir, setWatchDirValue] = useState("");
   const [meetingContext, setMeetingContext] = useState("");
+  const [summaryStyle, setSummaryStyle] = useState("timeline");
   const [steps, setStepsValue] = useState<Steps>({ summary: true, note: true, kanban: true, wiki: true });
   const [model, setModelValue] = useState("");
   const [custom, setCustom] = useState(false);
@@ -66,6 +68,7 @@ export function Settings() {
       setWatchDirValue(config.data.watch_dir ?? "");
       setMeetingContext(config.data.meeting_context ?? "");
       setStepsValue(config.data.steps);
+      setSummaryStyle(config.data.summary_style ?? "timeline");
     }
   }, [config.data]);
 
@@ -310,6 +313,15 @@ export function Settings() {
         </div>
       </Card>
       )}
+
+      <Card title="Estilo do resumo" eyebrow="LLM" index="B3">
+        <select aria-label="Estilo padrão do resumo" value={summaryStyle}
+          onChange={(e) => { setSummaryStyle(e.target.value); setStyle.mutate(e.target.value, { onSuccess: () => toast("ok", "Estilo salvo."), onError }); }}
+          className="w-fit rounded-lg border border-line px-3 py-2 text-sm">
+          <option value="timeline">Com períodos</option>
+          <option value="plain">Resumo simples</option>
+        </select>
+      </Card>
 
       <Card title="Etapas do processamento" eyebrow="Pipeline" index="C">
         <div className="flex flex-col gap-2">

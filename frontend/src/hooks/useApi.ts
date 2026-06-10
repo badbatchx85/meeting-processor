@@ -151,6 +151,14 @@ export function useSetMeetingContext() {
   });
 }
 
+export function useSetSummaryStyle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (style: string) => api.post("/api/config/summary-style", { style }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["config"] }),
+  });
+}
+
 export function useProcessFile() {
   const qc = useQueryClient();
   return useMutation({
@@ -188,9 +196,9 @@ export function useDeleteMeeting() {
 export function useSummarizeMeeting() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/api/meetings/${encodeURIComponent(id)}/summarize`),
-    onSuccess: (_d, id) => {
+    mutationFn: ({ id, style }: { id: string; style?: string }) =>
+      api.post(`/api/meetings/${encodeURIComponent(id)}/summarize`, { style }),
+    onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: ["status"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });
       qc.invalidateQueries({ queryKey: ["history"] });

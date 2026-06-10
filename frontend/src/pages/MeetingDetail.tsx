@@ -8,7 +8,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
 import {
   useMeeting, useSummarizeMeeting, useTranscribeMeeting,
-  useGenerationLog, useMeetingSource, useDeleteMeetingSource, useStatus,
+  useGenerationLog, useMeetingSource, useDeleteMeetingSource, useStatus, useConfig,
 } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,6 +59,11 @@ export function MeetingDetail() {
     wasActive.current = isActive;
   }, [activeJob, id, qc]);
 
+  const config = useConfig();
+  const [summaryStyle, setSummaryStyle] = useState("timeline");
+
+  useEffect(() => { if (config.data) setSummaryStyle(config.data.summary_style ?? "timeline"); }, [config.data]);
+
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("summary");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -77,7 +82,7 @@ export function MeetingDetail() {
   const sourceGone = source.data ? !source.data.exists : false;
 
   const generateSummary = () =>
-    summarize.mutate(id, {
+    summarize.mutate({ id, style: summaryStyle }, {
       onSuccess: () => toast("ok", "Gerando resumo — acompanhe abaixo e no Dashboard."),
       onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
     });
@@ -120,6 +125,12 @@ export function MeetingDetail() {
           >
             <FileText size={14} /> {transcribe.isPending ? "Enviando…" : "Gerar transcrição"}
           </button>
+          <select aria-label="Estilo do resumo" value={summaryStyle}
+            onChange={(e) => setSummaryStyle(e.target.value)} disabled={!!activeJob}
+            className="rounded-lg border border-line px-2 py-1.5 text-[13px]">
+            <option value="timeline">Com períodos</option>
+            <option value="plain">Resumo simples</option>
+          </select>
           <button onClick={generateSummary} disabled={summarize.isPending || !!activeJob} className={chip}>
             <Sparkles size={14} /> {summarize.isPending ? "Enviando…" : "Gerar resumo"}
           </button>

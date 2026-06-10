@@ -28,7 +28,7 @@ export function Meetings() {
       onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
     });
   const runSummarize = (id: string) =>
-    summarize.mutate(id, {
+    summarize.mutate({ id }, {
       onSuccess: () => toast("ok", "Gerando resumo — acompanhe no Dashboard."),
       onError: (e) => toast("err", e instanceof ApiError ? e.message : "Erro"),
     });
