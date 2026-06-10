@@ -294,6 +294,37 @@ class _BaseSummarizer:
                 return None
         return data if isinstance(data, dict) else None
 
+    @staticmethod
+    def _as_list(value) -> list:
+        return value if isinstance(value, list) else []
+
+    @staticmethod
+    def _coerce_action_item(raw):
+        if not isinstance(raw, dict):
+            return None
+        data = dict(raw)
+        if isinstance(data.get("priority"), str):
+            data["priority"] = data["priority"].strip().lower() or None
+        try:
+            return ActionItem(**data)
+        except Exception:  # noqa: BLE001 — pula item malformado, mantém os bons
+            logger.debug("ActionItem inválido ignorado: %s", raw)
+            return None
+
+    @staticmethod
+    def _coerce_time_window(raw):
+        if not isinstance(raw, dict):
+            return None
+        try:
+            return TimeWindowSummary(
+                start_minutes=int(raw.get("start_minutes", 0)),
+                end_minutes=int(raw.get("end_minutes", 0)),
+                summary=str(raw.get("summary", "")),
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("TimeWindow inválido ignorado: %s", raw)
+            return None
+
     def _parse_response(self, response_text: str) -> MeetingSummary:
         data = self._extract_json(response_text)
         if data is None:
@@ -302,17 +333,19 @@ class _BaseSummarizer:
             return self._empty_summary()
 
         return MeetingSummary(
-            executive_summary=data.get("executive_summary", ""),
+            executive_summary=str(data.get("executive_summary", "") or ""),
             time_windows=[
-                TimeWindowSummary(**tw) for tw in data.get("time_windows", [])
+                tw for tw in (self._coerce_time_window(x) for x in self._as_list(data.get("time_windows"))) if tw
             ],
-            action_items=[ActionItem(**ai) for ai in data.get("action_items", [])],
-            participants=data.get("participants", []),
-            key_topics=data.get("key_topics", []),
-            purpose=data.get("purpose", ""),
-            meeting_type=data.get("meeting_type", ""),
-            decisions=data.get("decisions", []),
-            open_questions=data.get("open_questions", []),
+            action_items=[
+                ai for ai in (self._coerce_action_item(x) for x in self._as_list(data.get("action_items"))) if ai
+            ],
+            participants=[str(x) for x in self._as_list(data.get("participants"))],
+            key_topics=[str(x) for x in self._as_list(data.get("key_topics"))],
+            purpose=str(data.get("purpose", "") or ""),
+            meeting_type=str(data.get("meeting_type", "") or ""),
+            decisions=[str(x) for x in self._as_list(data.get("decisions"))],
+            open_questions=[str(x) for x in self._as_list(data.get("open_questions"))],
         )
 
     @staticmethod
