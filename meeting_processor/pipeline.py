@@ -2,6 +2,7 @@
 
 import logging
 import re
+import shutil
 import time
 from datetime import datetime
 from pathlib import Path
@@ -112,6 +113,16 @@ class MeetingPipeline:
         # (do contrário ele ficaria preso em "processando").
         audio_path: Path | None = None
         try:
+            # Pré-checagem de disco: falha rápida e legível em vez de OSError no meio.
+            check_dir = self.config.temp_dir if Path(self.config.temp_dir).is_dir() else self.config.project_root
+            free = shutil.disk_usage(check_dir).free
+            need = video_path.stat().st_size * 3
+            if free < need:
+                raise RuntimeError(
+                    f"Espaço em disco insuficiente: ~{need / 1e9:.1f} GB necessários, "
+                    f"{free / 1e9:.1f} GB livres."
+                )
+
             # Etapa 1: Extrair áudio (sempre)
             logger.info("[1] Extraindo audio...")
             job.advance("audio", "Convertendo video para WAV 16kHz")
