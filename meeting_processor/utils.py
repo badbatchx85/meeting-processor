@@ -6,6 +6,10 @@ parsing de timestamps) para evitar duplicação — DRY.
 
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+
 
 def yaml_quote(value: str) -> str:
     """Encode a string as a YAML double-quoted scalar (escapes ``\\`` and ``"``).
@@ -55,3 +59,15 @@ def parse_timestamp(ts: str) -> float:
         m, s = parts
         return int(m) * 60 + float(s)
     return 0.0
+
+
+def write_json_atomic(path, data) -> None:
+    """Grava ``data`` como JSON de forma atômica (.tmp + os.replace).
+
+    Evita corromper o arquivo se o processo morrer no meio da escrita.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)

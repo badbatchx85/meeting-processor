@@ -406,9 +406,8 @@ def _load_history_data(vault_path: Path) -> list[dict[str, Any]] | None:
 
 
 def _write_history_data(vault_path: Path, data: list[dict[str, Any]]) -> None:
-    _history_file(vault_path).write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    from ..utils import write_json_atomic
+    write_json_atomic(_history_file(vault_path), data)
 
 
 def _close_active(entry: dict[str, Any], message: str) -> None:

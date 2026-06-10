@@ -191,11 +191,8 @@ class Dashboard:
                 if j.status == "error"
                 else None,
             })
-        self.history_path.parent.mkdir(parents=True, exist_ok=True)
-        self.history_path.write_text(
-            json.dumps(entries, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from .utils import write_json_atomic
+        write_json_atomic(self.history_path, entries)
 
     # --- Renderizacao ---
 
