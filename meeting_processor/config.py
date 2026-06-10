@@ -72,6 +72,10 @@ class Settings(BaseModel):
     gemini_model: str = "gemini-2.0-flash"
     gemini_request_timeout: float = 600.0
 
+    anthropic_temperature: float = 0.3
+    openai_temperature: float = 0.3
+    gemini_temperature: float = 0.3
+
     # Ollama (LLM local)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:14b"
@@ -218,6 +222,9 @@ def load_config(config_path: str | None = None) -> Settings:
     float_overrides = {
         "MEETING_OLLAMA_TEMPERATURE": "ollama_temperature",
         "MEETING_OLLAMA_REQUEST_TIMEOUT": "ollama_request_timeout",
+        "MEETING_ANTHROPIC_TEMPERATURE": "anthropic_temperature",
+        "MEETING_OPENAI_TEMPERATURE": "openai_temperature",
+        "MEETING_GEMINI_TEMPERATURE": "gemini_temperature",
     }
     for env_key, config_key in float_overrides.items():
         env_val = os.environ.get(env_key)

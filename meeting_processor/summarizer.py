@@ -499,6 +499,7 @@ class AnthropicSummarizer(_BaseSummarizer):
                 message = self.client.messages.create(
                     model=self.config.anthropic_model,
                     max_tokens=self.config.max_tokens_summary,
+                    temperature=self.config.anthropic_temperature,
                     system=[
                         {
                             "type": "text",
@@ -664,6 +665,7 @@ class OpenAISummarizer(_BaseSummarizer):
         for attempt in range(retries):
             payload: dict = {
                 "model": self.model,
+                "temperature": self.config.openai_temperature,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -747,7 +749,10 @@ class GeminiSummarizer(_BaseSummarizer):
         payload = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json"},
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "temperature": self.config.gemini_temperature,
+            },
         }
         last_err: Exception | None = None
 

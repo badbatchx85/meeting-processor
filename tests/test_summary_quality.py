@@ -28,3 +28,59 @@ def test_parse_coerces_priority_and_float_minutes(config):
     assert out.action_items[0].priority == "alta"
     assert out.time_windows[0].start_minutes == 0
     assert out.time_windows[0].end_minutes == 5
+
+
+# --- Task 2: cloud temperature ---------------------------------------------
+
+import httpx
+
+
+def test_anthropic_passes_temperature(config, monkeypatch):
+    config.anthropic_api_key = "test-key"
+    config.anthropic_temperature = 0.3
+    from meeting_processor.summarizer import AnthropicSummarizer
+    s = AnthropicSummarizer(config)
+    captured = {}
+
+    class _Msg:
+        content = [type("C", (), {"text": "{}"})()]
+
+    monkeypatch.setattr(s.client.messages, "create", lambda **kw: (captured.update(kw), _Msg())[1])
+    s._call_llm("sys", "usr")
+    assert captured["temperature"] == 0.3
+
+
+def _fake_post_capturing(captured):
+    class _Resp:
+        status_code = 200
+        def json(self_inner):
+            return {
+                "choices": [{"message": {"content": "{}"}}],
+                "candidates": [{"content": {"parts": [{"text": "{}"}]}}],
+            }
+        def raise_for_status(self_inner):
+            return None
+    def fake_post(self_inner, url, headers=None, params=None, json=None):
+        captured.update(json or {})
+        return _Resp()
+    return fake_post
+
+
+def test_openai_passes_temperature(config, monkeypatch):
+    config.openai_api_key = "k"
+    config.openai_temperature = 0.3
+    from meeting_processor.summarizer import OpenAISummarizer
+    captured = {}
+    monkeypatch.setattr(httpx.Client, "post", _fake_post_capturing(captured))
+    OpenAISummarizer(config)._call_llm("sys", "usr")
+    assert captured["temperature"] == 0.3
+
+
+def test_gemini_passes_temperature(config, monkeypatch):
+    config.gemini_api_key = "k"
+    config.gemini_temperature = 0.3
+    from meeting_processor.summarizer import GeminiSummarizer
+    captured = {}
+    monkeypatch.setattr(httpx.Client, "post", _fake_post_capturing(captured))
+    GeminiSummarizer(config)._call_llm("sys", "usr")
+    assert captured["generationConfig"]["temperature"] == 0.3
