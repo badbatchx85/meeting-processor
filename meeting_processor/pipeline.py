@@ -271,6 +271,11 @@ class MeetingPipeline:
                     logger.warning("Falha ao criar Kanban (nao critico): %s", e)
                     job.set_progress("kanban", 100, f"Falha: {e}")
                 self.dashboard.update(job)
+                try:
+                    from .person_rollup import regenerate_person_rollups
+                    regenerate_person_rollups(self.config)
+                except Exception as e:  # noqa: BLE001 — rollup não é crítico
+                    logger.warning("Falha ao gerar rollup de tarefas (nao critico): %s", e)
 
             # Etapa 6: Integrar com wiki (opcional)
             if steps["wiki"]:

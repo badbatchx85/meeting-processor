@@ -1163,6 +1163,12 @@ def create_app(config: Settings | None = None) -> FastAPI:
         if not ok:
             raise HTTPException(status_code=404, detail="Tarefa não encontrada")
 
+        try:
+            from ..person_rollup import regenerate_person_rollups
+            regenerate_person_rollups(config)
+        except Exception:  # noqa: BLE001 — rollup não pode derrubar o move
+            logger.warning("Falha ao regenerar rollup após mover tarefa", exc_info=True)
+
         return JSONResponse({"ok": True, "moved_to": to_column})
 
     # =====================================================================

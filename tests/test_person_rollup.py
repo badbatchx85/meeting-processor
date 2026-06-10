@@ -66,3 +66,21 @@ def test_rollup_removes_stale_person_note(config):
     _write_board(config, m1, _board(m1, todo=[], done=[("T", "Ana")]))
     regenerate_person_rollups(config)
     assert not (config.vault_path / "wiki" / "pessoas" / "ana.md").exists()
+
+
+# --- Task 3: move hook regenerates the rollup ------------------------------
+
+
+def test_move_to_done_drops_from_rollup(client, config):
+    from meeting_processor.web.tasks_io import list_all_tasks
+    m1 = "2026-01-01 10h00 - Reuniao A"
+    _write_board(config, m1, _board(m1, todo=[("Tarefa Ana", "Ana")], done=[]))
+    regenerate_person_rollups(config)
+    pessoas = config.vault_path / "wiki" / "pessoas"
+    assert "Tarefa Ana" in (pessoas / "ana.md").read_text(encoding="utf-8")
+
+    task = next(t for t in list_all_tasks(config.reunioes_path) if t.description == "Tarefa Ana")
+    r = client.post("/actions/tasks/move",
+                    json={"task_id": task.task_id, "meeting_id": m1, "to_column": "done"})
+    assert r.status_code == 200
+    assert not (pessoas / "ana.md").exists()
