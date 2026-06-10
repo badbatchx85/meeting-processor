@@ -42,3 +42,31 @@ def test_style_defaults_to_config(config):
     f = _StyleFake(config)
     f.summarize(_tiny(), "a.mp4")
     assert "MODO RESUMO SIMPLES" in f.captured[0]
+
+
+# --- Task 2: pipeline threads style ----------------------------------------
+
+from datetime import datetime
+from meeting_processor.models import MeetingSummary
+from meeting_processor.pipeline import MeetingPipeline
+
+
+class _CapSumm:
+    def __init__(self):
+        self.style = "UNSET"
+    def summarize(self, transcript, source_file, style=None):
+        self.style = style
+        return MeetingSummary(executive_summary="x", time_windows=[], action_items=[],
+                              participants=[], key_topics=[])
+
+
+def test_summarize_forwards_style(config):
+    pipe = MeetingPipeline(config)
+    fake = _CapSumm()
+    pipe.summarizer = fake   # pre-set so _summarize won't construct a real one
+    paths = pipe.note_generator.prepare("x.mp4", datetime.now())
+    job = pipe.dashboard.new_job("x.mp4")
+    pipe._summarize(_tiny(), paths, "x.mp4", datetime.now(), job,
+                    {"summary": True, "note": False, "kanban": False, "wiki": False},
+                    style="plain")
+    assert fake.style == "plain"

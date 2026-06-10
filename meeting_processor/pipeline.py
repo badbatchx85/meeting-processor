@@ -213,7 +213,7 @@ class MeetingPipeline:
                 audio_path.unlink()
                 logger.debug("Arquivo temporario removido: %s", audio_path)
 
-    def _summarize(self, transcript, paths, source_file, created_at, job, steps):
+    def _summarize(self, transcript, paths, source_file, created_at, job, steps, style=None):
         """Etapas 3-6 (resumo/nota/kanban/wiki) sobre um transcript + pasta.
 
         Caminho único usado pelo processamento normal e pelo re-resumo de uma
@@ -238,7 +238,7 @@ class MeetingPipeline:
             self.dashboard.update(job)
             if self.summarizer is None:
                 self.summarizer = MeetingSummarizer(self.config)
-            summary = self.summarizer.summarize(transcript, source_file)
+            summary = self.summarizer.summarize(transcript, source_file, style=style)
             job.set_progress("summary", 100, f"{len(summary.action_items)} tarefas, {len(summary.participants)} participantes")
             self.dashboard.update(job)
 
@@ -302,7 +302,7 @@ class MeetingPipeline:
         self.note_generator.write_group_note(paths, has_summary=steps["note"])
         return summary
 
-    def summarize_existing(self, meeting_id: str, job_started=None, cancel_event=None) -> None:
+    def summarize_existing(self, meeting_id: str, job_started=None, cancel_event=None, style=None) -> None:
         """Gera o resumo de uma reunião já transcrita (sem re-transcrever)."""
         self._cancel_event = cancel_event
         # Defesa contra path traversal: meeting_dir deve ser filho direto de
@@ -336,7 +336,7 @@ class MeetingPipeline:
         started = datetime.now()
         try:
             self._check_cancel()
-            self._summarize(transcript, paths, meeting_id, created_at, job, steps)
+            self._summarize(transcript, paths, meeting_id, created_at, job, steps, style=style)
             job.complete("resumo gerado a partir da transcrição")
             self.dashboard.update(job)
             generation_log.append(
