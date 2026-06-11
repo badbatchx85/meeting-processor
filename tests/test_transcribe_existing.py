@@ -99,7 +99,7 @@ def test_summarize_existing_appends_log(config, tmp_path, monkeypatch):
 
     class _FakeSummarizer:
         def __init__(self, *a, **k): ...
-        def summarize(self, transcript, source_filename):
+        def summarize(self, transcript, source_filename, style=None):
             return MeetingSummary(
                 executive_summary="ok", time_windows=[],
                 action_items=[ActionItem(description="x", assignee="y")],

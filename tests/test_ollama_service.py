@@ -64,7 +64,7 @@ def test_pipeline_summary_ensures_ollama_for_local(config, monkeypatch):
 
     class _FakeSummarizer:
         def __init__(self, *a, **k): ...
-        def summarize(self, transcript, source_filename):
+        def summarize(self, transcript, source_filename, style=None):
             return MeetingSummary(
                 executive_summary="x", time_windows=[], action_items=[],
                 participants=[], key_topics=[],
