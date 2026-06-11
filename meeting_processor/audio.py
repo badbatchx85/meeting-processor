@@ -92,26 +92,31 @@ def extract_audio(video_path: Path, config: Settings) -> Path:
 
     logger.info("Extraindo áudio de %s...", video_path.name)
 
+    audio_filter = config.audio_filter if config.enable_audio_denoise else None
     try:
         subprocess.run(
-            [
-                "ffmpeg",
-                "-i", str(video_path),
-                "-vn",                  # sem vídeo
-                "-acodec", "pcm_s16le", # WAV PCM 16-bit
-                "-ar", "16000",         # 16kHz (padrão Whisper)
-                "-ac", "1",             # mono
-                "-y",                   # sobrescrever se existir
-                str(output_path),
-            ],
+            _ffmpeg_cmd(video_path, output_path, audio_filter),
             capture_output=True,
             text=True,
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"Falha ao extrair áudio: {e.stderr}"
-        ) from e
+        if audio_filter:
+            logger.warning(
+                "Falha no ffmpeg com filtro de audio. Repetindo sem filtro. (%s)",
+                (e.stderr or "").strip()[-300:] or e,
+            )
+            try:
+                subprocess.run(
+                    _ffmpeg_cmd(video_path, output_path, None),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e2:
+                raise RuntimeError(f"Falha ao extrair áudio: {e2.stderr}") from e2
+        else:
+            raise RuntimeError(f"Falha ao extrair áudio: {e.stderr}") from e
 
     logger.info("Áudio extraído: %s (%.1f MB)", output_path.name, output_path.stat().st_size / 1_048_576)
     return output_path
