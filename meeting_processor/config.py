@@ -132,6 +132,10 @@ class Settings(BaseModel):
     cleanup_temp: bool = True
     log_level: str = "INFO"
 
+    # Pré-processamento de áudio (denoise/normalize) antes do Whisper — opt-in.
+    enable_audio_denoise: bool = False
+    audio_filter: str = "highpass=f=80,afftdn=nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11"
+
     # Caminhos resolvidos
     project_root: str = ""
 
@@ -228,6 +232,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_HF_TOKEN": "hf_token",
         "HF_TOKEN": "hf_token",
         "MEETING_DIARIZATION_MODEL": "diarization_model",
+        "MEETING_AUDIO_FILTER": "audio_filter",
     }
     for env_key, config_key in string_overrides.items():
         env_val = os.environ.get(env_key)
@@ -270,6 +275,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_ENABLE_WIKI": "enable_wiki",
         "MEETING_WHISPER_ADAPTIVE": "whisper_adaptive",
         "MEETING_ENABLE_DIARIZATION": "enable_diarization",
+        "MEETING_AUDIO_DENOISE": "enable_audio_denoise",
     }
     for env_key, config_key in bool_overrides.items():
         env_val = os.environ.get(env_key)

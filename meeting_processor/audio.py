@@ -53,6 +53,22 @@ def get_duration(file_path: Path) -> float:
         return 0.0
 
 
+def _ffmpeg_cmd(video_path: Path, output_path: Path, audio_filter: str | None) -> list[str]:
+    """Monta a linha de comando do ffmpeg, com o filtro de áudio quando houver."""
+    cmd = [
+        "ffmpeg",
+        "-i", str(video_path),
+        "-vn",                   # sem vídeo
+        "-acodec", "pcm_s16le",  # WAV PCM 16-bit
+        "-ar", "16000",          # 16kHz (padrão Whisper)
+        "-ac", "1",              # mono
+    ]
+    if audio_filter:
+        cmd += ["-af", audio_filter]
+    cmd += ["-y", str(output_path)]
+    return cmd
+
+
 def extract_audio(video_path: Path, config: Settings) -> Path:
     """Extrai áudio WAV 16kHz mono do vídeo para transcrição com Whisper.
 
