@@ -82,7 +82,8 @@ Regras:
 - Se não conseguir identificar participantes pelo nome, use "Participante 1", etc.
 - Se um CONTEXTO DA REUNIÃO for fornecido, use-o para grafar corretamente os nomes dos participantes e os termos/siglas técnicos.
 - Se não houver tarefas, retorne uma lista vazia para action_items.
-- Tópicos principais devem ser 3-5 temas centrais discutidos.\
+- Tópicos principais devem ser 3-5 temas centrais discutidos.
+- Se a transcrição tiver rótulos "Falante N:", use-os para identificar os participantes e atribuir falas, decisões e tarefas.\
 """
 
 # Sentinela do resumo "falhou" — usada para detectar blocos que não puderam
@@ -253,7 +254,7 @@ class _BaseSummarizer:
                 lines.append(f"\n[{chunk_start:02d}:00 - {chunk_end:02d}:00]")
 
             timestamp = format_timestamp(seg.start)
-            lines.append(f"  [{timestamp}] {seg.text}")
+            lines.append(f"  [{timestamp}] {seg.display_text}")
 
         return "\n".join(lines)
 

@@ -290,7 +290,7 @@ purpose: {purpose_q}
         ]
         for seg in transcript.segments:
             timestamp = format_timestamp(seg.start)
-            lines.append(f"**[{timestamp}]** {seg.text}  ")
+            lines.append(f"**[{timestamp}]** {seg.display_text}  ")
         path.write_text("\n".join(lines), encoding="utf-8")
 
     @staticmethod
