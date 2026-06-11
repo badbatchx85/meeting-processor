@@ -157,6 +157,8 @@ class MeetingPipeline:
             self.dashboard.update(job)
             self._check_cancel()
 
+            self._maybe_diarize(transcript, audio_path)
+
             # Salvar transcrição no vault (sempre)
             paths = self.note_generator.prepare(video_path.name, created_at)
             self.note_generator.write_transcription(transcript, paths)
@@ -212,6 +214,22 @@ class MeetingPipeline:
             if self.config.cleanup_temp and audio_path is not None and audio_path.exists():
                 audio_path.unlink()
                 logger.debug("Arquivo temporario removido: %s", audio_path)
+
+    def _maybe_diarize(self, transcript, audio_path) -> None:
+        """Atribui falantes aos segmentos quando a diarização está ligada.
+
+        Import preguiçoso (pyannote é opcional) e tudo embrulhado: a diarização
+        nunca derruba o pipeline.
+        """
+        if not self.config.enable_diarization:
+            return
+        try:
+            from .diarizer import diarize, assign_speakers
+            turns = diarize(audio_path, self.config)
+            assign_speakers(transcript.segments, turns)
+            logger.info("Diarizacao: %d turnos.", len(turns))
+        except Exception as e:  # noqa: BLE001 — nunca derruba o pipeline
+            logger.warning("Falha na diarizacao (nao critico): %s", e)
 
     def _summarize(self, transcript, paths, source_file, created_at, job, steps, style=None):
         """Etapas 3-6 (resumo/nota/kanban/wiki) sobre um transcript + pasta.

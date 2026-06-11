@@ -183,6 +183,19 @@ Desligar o **Resumo** equivale ao modo "só transcrição".
 
 ---
 
+## Diarização (quem falou)
+
+Opcional. Rotula cada trecho da transcrição com o falante ("Falante 1", "Falante 2"…), rodando localmente após a transcrição.
+
+1. `pip install -r requirements-diarization.txt`
+2. Aceite as condições de uso de `pyannote/speaker-diarization-3.1` no Hugging Face.
+3. No `.env`: `MEETING_HF_TOKEN=hf_...` e `MEETING_ENABLE_DIARIZATION=true`.
+4. Reinicie.
+
+Se estiver desligada ou indisponível (pacote/token ausente), o app se comporta exatamente como antes.
+
+---
+
 ## Acelerar com GPU (opcional)
 
 O backend padrão (`openai-whisper`) é simples e funciona em qualquer máquina,

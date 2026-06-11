@@ -1,0 +1,5 @@
+# Diarização de falantes (opcional). Instale com:
+#   pip install -r requirements-diarization.txt
+# Depois aceite as condições de uso de pyannote/speaker-diarization-3.1 no
+# Hugging Face e defina MEETING_HF_TOKEN + MEETING_ENABLE_DIARIZATION=true.
+pyannote.audio>=3.1
