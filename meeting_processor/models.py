@@ -7,6 +7,12 @@ class TranscriptSegment(BaseModel):
     start: float
     end: float
     text: str
+    speaker: str | None = None
+
+    @property
+    def display_text(self) -> str:
+        """Texto com o rótulo do falante, quando houver."""
+        return f"{self.speaker}: {self.text}" if self.speaker else self.text
 
 
 class Transcript(BaseModel):

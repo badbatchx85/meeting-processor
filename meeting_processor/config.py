@@ -38,6 +38,10 @@ class Settings(BaseModel):
     # Adaptativo: escolhe o modelo Whisper pela duração do áudio (ver
     # transcriber.select_whisper_model). Off => usa whisper_model fixo.
     whisper_adaptive: bool = False
+    # Diarização (quem falou) — opt-in, requer pyannote + token Hugging Face.
+    enable_diarization: bool = False
+    hf_token: str = ""
+    diarization_model: str = "pyannote/speaker-diarization-3.1"
     # Caminhos do whisper.cpp. Vazio => detecta automaticamente no PATH
     # do sistema e em .whisper-cpp/ e .models/ dentro do projeto.
     whisper_cli_path: str = ""
@@ -221,6 +225,9 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_OLLAMA_MODEL": "ollama_model",
         "MEETING_CONTEXT": "meeting_context",
         "MEETING_SUMMARY_STYLE": "summary_style",
+        "MEETING_HF_TOKEN": "hf_token",
+        "HF_TOKEN": "hf_token",
+        "MEETING_DIARIZATION_MODEL": "diarization_model",
     }
     for env_key, config_key in string_overrides.items():
         env_val = os.environ.get(env_key)
@@ -262,6 +269,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_ENABLE_KANBAN": "enable_kanban",
         "MEETING_ENABLE_WIKI": "enable_wiki",
         "MEETING_WHISPER_ADAPTIVE": "whisper_adaptive",
+        "MEETING_ENABLE_DIARIZATION": "enable_diarization",
     }
     for env_key, config_key in bool_overrides.items():
         env_val = os.environ.get(env_key)
