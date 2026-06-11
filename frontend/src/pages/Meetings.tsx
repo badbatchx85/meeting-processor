@@ -9,6 +9,7 @@ import { useToast } from "../components/Toast";
 import { useMeetings, useDeleteMeeting, useHistory, useTranscribeMeeting, useSummarizeMeeting } from "../hooks/useApi";
 import { ConversionHistory } from "../components/ConversionHistory";
 import { ApiError } from "../api/client";
+import { sortMeetings, type SortKey } from "../lib/sortMeetings";
 
 export function Meetings() {
   const meetings = useMeetings();
@@ -18,9 +19,20 @@ export function Meetings() {
   const summarize = useSummarizeMeeting();
   const toast = useToast();
   const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "title" ? "asc" : "desc"); }
+  };
+  const arrow = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "");
   const [pending, setPending] = useState<string | null>(null);
 
-  const items = (meetings.data ?? []).filter((m) => m.title.toLowerCase().includes(q.toLowerCase()));
+  const term = q.toLowerCase();
+  const filtered = (meetings.data ?? []).filter((m) =>
+    `${m.title} ${m.purpose ?? ""} ${m.meeting_type ?? ""}`.toLowerCase().includes(term),
+  );
+  const items = sortMeetings(filtered, sortKey, sortDir);
 
   const runTranscribe = (id: string) =>
     transcribe.mutate(id, {
@@ -70,10 +82,22 @@ export function Meetings() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left">
-                <th className="eyebrow pb-3 font-normal">Título</th>
-                <th className="eyebrow pb-3 font-normal">Data</th>
-                <th className="eyebrow pb-3 font-normal">Duração</th>
-                <th className="eyebrow pb-3 font-normal">Tarefas</th>
+                <th className="pb-3">
+                  <button onClick={() => toggleSort("title")} aria-label="Ordenar por Título"
+                    className="eyebrow font-normal transition-colors hover:text-ink">Título{arrow("title")}</button>
+                </th>
+                <th className="pb-3">
+                  <button onClick={() => toggleSort("created")} aria-label="Ordenar por Data"
+                    className="eyebrow font-normal transition-colors hover:text-ink">Data{arrow("created")}</button>
+                </th>
+                <th className="pb-3">
+                  <button onClick={() => toggleSort("duration")} aria-label="Ordenar por Duração"
+                    className="eyebrow font-normal transition-colors hover:text-ink">Duração{arrow("duration")}</button>
+                </th>
+                <th className="pb-3">
+                  <button onClick={() => toggleSort("task_count")} aria-label="Ordenar por Tarefas"
+                    className="eyebrow font-normal transition-colors hover:text-ink">Tarefas{arrow("task_count")}</button>
+                </th>
                 <th className="pb-3"></th>
               </tr>
             </thead>
