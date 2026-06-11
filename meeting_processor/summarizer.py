@@ -272,7 +272,7 @@ class _BaseSummarizer:
         current: list[TranscriptSegment] = []
         current_len = 0
         for seg in segments:
-            seg_len = len(seg.text) + 32
+            seg_len = len(seg.display_text) + 32
             if current and current_len + seg_len > char_budget:
                 chunks.append(current)
                 current = []
