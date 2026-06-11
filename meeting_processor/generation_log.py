@@ -12,6 +12,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from .utils import redact_secrets
+
 logger = logging.getLogger(__name__)
 
 _FILENAME = ".generation-log.json"
@@ -62,7 +64,7 @@ def append(
             {
                 "action": action,
                 "status": status,
-                "error": error,
+                "error": redact_secrets(error) if error else error,
                 "detail": detail,
                 "started": started.isoformat(timespec="seconds"),
                 "completed": completed.isoformat(timespec="seconds"),

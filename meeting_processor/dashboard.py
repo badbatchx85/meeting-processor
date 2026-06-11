@@ -65,8 +65,10 @@ class ProcessingJob:
             self.details["result"] = detail
 
     def fail(self, error: str) -> None:
+        from .utils import redact_secrets
+
         self.status = "error"
-        self.error_message = error
+        self.error_message = redact_secrets(error)
         self.completed_at = datetime.now()
 
 

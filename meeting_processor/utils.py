@@ -81,3 +81,30 @@ def write_json_atomic(path, data) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp, path)
+
+
+# Segredos que podem vazar em mensagens de erro (URLs com chave, tokens, etc.).
+_SECRET_PATTERNS = [
+    # chave/token em query string de URL: ...?key=ABC  /  &access_token=ABC
+    (
+        re.compile(r"(?i)([?&](?:key|api[-_]?key|access[-_]?token|token)=)[^&\s'\"]+"),
+        r"\1REDACTED",
+    ),
+    # cabeçalho Authorization: Bearer <token>
+    (re.compile(r"(?i)(authorization:\s*bearer\s+)\S+"), r"\1REDACTED"),
+    # chaves estilo sk-... (OpenAI/Anthropic)
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{16,}"), "sk-REDACTED"),
+]
+
+
+def redact_secrets(text: str) -> str:
+    """Remove segredos (chaves de API, tokens) de uma string.
+
+    Aplicado antes de persistir/exibir mensagens de erro, que às vezes embutem a
+    URL completa do provedor — incluindo a chave de API em ``?key=...``.
+    """
+    if not text:
+        return text
+    for pattern, repl in _SECRET_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
