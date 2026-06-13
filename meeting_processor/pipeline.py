@@ -291,9 +291,11 @@ class MeetingPipeline:
                 self.dashboard.update(job)
                 try:
                     from .person_rollup import regenerate_person_rollups
+                    from .vault_dashboard import regenerate_dashboard
                     regenerate_person_rollups(self.config)
-                except Exception as e:  # noqa: BLE001 — rollup não é crítico
-                    logger.warning("Falha ao gerar rollup de tarefas (nao critico): %s", e)
+                    regenerate_dashboard(self.config)
+                except Exception as e:  # noqa: BLE001 — rollup/dashboard não são críticos
+                    logger.warning("Falha ao gerar rollup/dashboard (nao critico): %s", e)
 
             # Etapa 6: Integrar com wiki (opcional)
             if steps["wiki"]:

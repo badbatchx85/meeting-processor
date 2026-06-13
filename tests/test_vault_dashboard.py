@@ -60,3 +60,17 @@ def test_regenerate_dashboard_empty_vault(config):
     text = (config.vault_path / "wiki" / "Dashboard Geral.md").read_text(encoding="utf-8")
     assert "0 reuniões · 0 tarefas abertas" in text
     assert "_Nenhuma reunião ainda._" in text
+
+
+# --- Task 2: the task-move hook also writes the dashboard -------------------
+
+
+def test_move_endpoint_writes_dashboard(client, config):
+    from meeting_processor.web.tasks_io import list_all_tasks
+    m1 = "2026-01-01 10h00 - A"
+    _seed_meeting(config, m1, _board(m1, todo=[("T", "Ana")], done=[]))
+    task = next(t for t in list_all_tasks(config.reunioes_path) if t.description == "T")
+    r = client.post("/actions/tasks/move",
+                    json={"task_id": task.task_id, "meeting_id": m1, "to_column": "done"})
+    assert r.status_code == 200
+    assert (config.vault_path / "wiki" / "Dashboard Geral.md").exists()
