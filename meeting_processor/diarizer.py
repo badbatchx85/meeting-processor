@@ -30,9 +30,12 @@ def diarize(audio_path, config: Settings) -> list[tuple[float, float, str]]:
         if torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
         diar = pipeline(str(audio_path))
+        # pyannote 3.x e o modelo 3.1 devolvem um Annotation direto; o modelo
+        # community-1 (pyannote 4.x) embrulha em ``output.speaker_diarization``.
+        ann = getattr(diar, "speaker_diarization", diar)
         return [
             (turn.start, turn.end, label)
-            for turn, _, label in diar.itertracks(yield_label=True)
+            for turn, _, label in ann.itertracks(yield_label=True)
         ]
     except Exception as e:  # noqa: BLE001 — diarizacao nunca derruba o pipeline
         logger.warning("Falha na diarizacao (%s). Seguindo sem falantes.", e)
