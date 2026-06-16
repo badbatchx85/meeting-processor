@@ -9,6 +9,7 @@ import { useToast } from "../components/Toast";
 import {
   useMeeting, useSummarizeMeeting, useTranscribeMeeting,
   useGenerationLog, useMeetingSource, useDeleteMeetingSource, useStatus, useConfig,
+  useMeetingWords,
 } from "../hooks/useApi";
 import { ApiError } from "../api/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,6 +41,7 @@ export function MeetingDetail() {
   const transcribe = useTranscribeMeeting();
   const log = useGenerationLog(id);
   const source = useMeetingSource(id);
+  const words = useMeetingWords(id);
   const deleteSource = useDeleteMeetingSource();
   const status = useStatus();
   const qc = useQueryClient();
@@ -196,7 +198,8 @@ export function MeetingDetail() {
           <p className="py-6 text-sm text-muted">Sem resumo ainda — use "Gerar resumo" acima.</p>
         ))}
         {tab === "transcript" && (
-          <TranscriptPlayer meetingId={id} markdown={d.transcricao_md} hasSource={source.data?.exists ?? false} />
+          <TranscriptPlayer meetingId={id} markdown={d.transcricao_md}
+            hasSource={source.data?.exists ?? false} words={words.data ?? null} />
         )}
         {tab === "tasks" && (
           <ul className="space-y-2">

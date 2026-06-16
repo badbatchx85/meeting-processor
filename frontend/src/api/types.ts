@@ -56,3 +56,5 @@ export interface GenerationLogEntry {
 export interface SourceInfo {
   exists: boolean; name: string; path: string; size: number | null;
 }
+export interface WordTime { start: number; end: number; text: string; }
+export interface WordSegment { start: number; end: number; text: string; speaker: string | null; words: WordTime[] | null; }

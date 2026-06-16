@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { MarkdownView } from "./MarkdownView";
+import type { WordSegment } from "../api/types";
 
 export interface TranscriptSegment {
   seconds: number;
@@ -28,14 +29,47 @@ export function TranscriptPlayer({
   meetingId,
   markdown,
   hasSource,
+  words = null,
 }: {
   meetingId: string;
   markdown: string;
   hasSource: boolean;
+  words?: WordSegment[] | null;
 }) {
   const segments = parseTranscript(markdown);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const wlVideoRef = useRef<HTMLVideoElement>(null);
+  const [wlTime, setWlTime] = useState(0);
+
+  if (hasSource && words && words.length > 0) {
+    const seekWord = (s: number) => {
+      const v = wlVideoRef.current;
+      if (v) { v.currentTime = s; void v.play(); }
+    };
+    return (
+      <div className="flex flex-col gap-4">
+        <video ref={wlVideoRef} controls preload="metadata"
+          onTimeUpdate={() => setWlTime(wlVideoRef.current?.currentTime ?? 0)}
+          src={`/api/meetings/${encodeURIComponent(meetingId)}/media`}
+          className="w-full rounded-lg bg-black" />
+        <p className="text-sm leading-7 text-ink-soft">
+          {words.flatMap((seg, si) =>
+            (seg.words ?? []).map((w, wi) => {
+              const active = wlTime >= w.start && wlTime < w.end;
+              return (
+                <button key={`${si}-${wi}`} onClick={() => seekWord(w.start)}
+                  aria-label={`Ir para palavra: ${w.text}`}
+                  className={active ? "rounded bg-brand/20 px-0.5" : "px-0.5 hover:bg-line-soft"}>
+                  {w.text}{" "}
+                </button>
+              );
+            }),
+          )}
+        </p>
+      </div>
+    );
+  }
 
   if (!hasSource || segments.length === 0) {
     return <MarkdownView>{markdown}</MarkdownView>;

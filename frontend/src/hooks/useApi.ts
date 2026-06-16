@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, uploadFile } from "../api/client";
 import type {
   Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse, Config,
-  HistoryEntry, LocalModels, PullStatus, GenerationLogEntry, SourceInfo,
+  HistoryEntry, LocalModels, PullStatus, GenerationLogEntry, SourceInfo, WordSegment,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -234,6 +234,15 @@ export const useMeetingSource = (id: string) =>
     queryKey: ["meeting-source", id],
     queryFn: () => api.get<SourceInfo>(`/api/meetings/${encodeURIComponent(id)}/source`),
     enabled: !!id,
+  });
+
+export const useMeetingWords = (id: string) =>
+  useQuery({
+    queryKey: ["meeting-words", id],
+    queryFn: async () => {
+      try { return await api.get<WordSegment[]>(`/api/meetings/${encodeURIComponent(id)}/words`); }
+      catch { return null; }   // 404 → no word timestamps
+    },
   });
 
 export function useDeleteMeetingSource() {
