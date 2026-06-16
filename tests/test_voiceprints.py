@@ -53,3 +53,33 @@ def test_voice_id_threshold_default_and_env(config, monkeypatch, tmp_path):
     monkeypatch.setenv("MEETING_VOICE_ID_THRESHOLD", "0.3")
     from meeting_processor.config import load_config
     assert load_config().voice_id_threshold == 0.3
+
+
+# --- Task 4: endpoints -----------------------------------------------------
+
+
+def _seed(config, folder, emb):
+    d = config.reunioes_path / folder
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"Transcricao - {folder}.md").write_text("# Transcricao\n", encoding="utf-8")
+    (d / f"Transcricao - {folder}.words.json").write_text(
+        json.dumps([{"start": 0, "end": 1, "text": "oi", "speaker": "Falante 1", "words": None}]),
+        encoding="utf-8")
+    (d / f"Transcricao - {folder}.embeddings.json").write_text(json.dumps(emb), encoding="utf-8")
+    return d
+
+
+def test_get_speakers_includes_suggestions(client, config):
+    mid = "2026-02-01 10h00 - reu"
+    _seed(config, mid, {"Falante 1": [1.0, 0.0]})
+    vp.save_repo(config.vault_path, {"Ana": {"vector": [1.0, 0.0], "count": 1}})
+    body = client.get(f"/api/meetings/{mid}/speakers").json()
+    assert body["suggestions"] == {"Falante 1": "Ana"}
+
+
+def test_post_speakers_enrolls_voiceprint(client, config):
+    mid = "2026-02-02 10h00 - reu"
+    _seed(config, mid, {"Falante 1": [0.0, 1.0]})
+    client.post(f"/api/meetings/{mid}/speakers", json={"names": {"Falante 1": "Bruno"}})
+    repo = vp.load_repo(config.vault_path)
+    assert "Bruno" in repo and repo["Bruno"]["vector"] == [0.0, 1.0]

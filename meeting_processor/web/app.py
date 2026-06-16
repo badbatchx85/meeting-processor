@@ -33,6 +33,7 @@ from ..config import Settings, load_config
 from ..dashboard import STAGES
 from ..utils import yaml_unquote
 from .. import speaker_names
+from .. import voiceprints
 from . import meeting_export, spa_serving
 from .runtime import (
     VALID_PROVIDERS,
@@ -1327,6 +1328,7 @@ def create_app(config: Settings | None = None) -> FastAPI:
         return {
             "detected": speaker_names.detected_labels(meeting_dir),
             "names": speaker_names.read_names(meeting_dir),
+            "suggestions": voiceprints.suggest(meeting_dir, config.vault_path, config.voice_id_threshold),
         }
 
     @app.post("/api/meetings/{meeting_id}/speakers")
@@ -1337,6 +1339,16 @@ def create_app(config: Settings | None = None) -> FastAPI:
         names = (payload or {}).get("names") or {}
         speaker_names.write_names(meeting_dir, names)
         speaker_names.regenerate_md(config, meeting_dir, speaker_names.read_names(meeting_dir))
+        try:
+            embs = voiceprints.read_meeting_embeddings(meeting_dir)
+            if embs:
+                repo = voiceprints.load_repo(config.vault_path)
+                for label, name in speaker_names.read_names(meeting_dir).items():
+                    if label in embs:
+                        voiceprints.enroll(repo, name, embs[label])
+                voiceprints.save_repo(config.vault_path, repo)
+        except Exception:  # noqa: BLE001 — enrollment não pode derrubar o save
+            logger.warning("Falha ao matricular voiceprints", exc_info=True)
         return {"ok": True}
 
     @app.delete("/api/meetings/{meeting_id}/source")
