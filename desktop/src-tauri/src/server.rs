@@ -70,7 +70,12 @@ pub async fn start_server(
             "PYTHONPATH",
             match std::env::var("PYTHONPATH") {
                 Ok(existing) if !existing.is_empty() => {
-                    format!("{}:{}", resources.display(), existing)
+                    // PYTHONPATH uses `;` on Windows, `:` elsewhere.
+                    #[cfg(windows)]
+                    let sep = ";";
+                    #[cfg(not(windows))]
+                    let sep = ":";
+                    format!("{}{}{}", resources.display(), sep, existing)
                 }
                 _ => resources.display().to_string(),
             },
