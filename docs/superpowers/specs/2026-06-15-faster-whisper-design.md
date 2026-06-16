@@ -1,7 +1,7 @@
-# faster-whisper backend + parallel diarization
+# faster-whisper backend + parallel diarization + word timestamps
 
 **Date:** 2026-06-15
-**Status:** Approved design
+**Status:** Approved design (revised to add word-level timestamps)
 
 ## Goal
 
@@ -9,6 +9,9 @@ Make transcription ~3–4x faster (and use ~1/3 the RAM) by adding a
 `faster-whisper` (CTranslate2) backend as the default — same large-v3 quality —
 while keeping `openai-whisper` as a fallback. Run pyannote diarization
 **concurrently** with transcription so "quem falou" costs no extra wall-clock.
+Capture **word-level timestamps** natively from faster-whisper and surface them
+in the click-to-seek transcript (word-precision seek + karaoke highlight), with
+graceful fallback to today's segment-level behavior when words are unavailable.
 
 ## Background (exact, from exploration)
 
@@ -34,6 +37,24 @@ while keeping `openai-whisper` as a fallback. Run pyannote diarization
   on failure) and `assign_speakers(segments, turns) -> None` (mutates).
 
 ## 1. `faster-whisper` backend (`transcriber.py`)
+
+### Model (`models.py`)
+```python
+class WordTime(BaseModel):
+    start: float
+    end: float
+    text: str
+
+class TranscriptSegment(BaseModel):
+    start: float
+    end: float
+    text: str
+    speaker: str | None = None
+    words: list[WordTime] | None = None   # NEW — None unless faster-whisper captured them
+    # display_text property unchanged
+```
+`words` defaults `None`, so `openai-whisper`/`whisper.cpp` (which don't capture
+words here) and all existing call sites are unaffected.
 
 ### Model-name map (pure, unit-tested)
 ```python
@@ -68,12 +89,20 @@ def _transcribe_faster(self, audio_path, progress_callback=None, model=None):
             language=self.config.whisper_language,
             initial_prompt=self.config.whisper_initial_prompt or None,
             vad_filter=True,
+            word_timestamps=True,          # NEW — per-word times
         )
         segments = []
         for s in seg_iter:                 # generator — consume it
             text = (s.text or "").strip()
             if text:
-                segments.append(TranscriptSegment(start=float(s.start), end=float(s.end), text=text))
+                words = [
+                    WordTime(start=float(w.start), end=float(w.end), text=(w.word or "").strip())
+                    for w in (getattr(s, "words", None) or [])
+                    if (w.word or "").strip()
+                ] or None
+                segments.append(
+                    TranscriptSegment(start=float(s.start), end=float(s.end), text=text, words=words)
+                )
     except Exception as e:  # noqa: BLE001
         _log_run_failure(self.config, "faster", {"model": model_name}, e)
         raise
@@ -152,6 +181,37 @@ start-before / finish-after pattern:
 right after (where `_maybe_diarize` was), before `write_transcription`. `_maybe_diarize`
 is removed (no other caller). Both threads read the same WAV read-only.
 
+## 3. Word-level timestamps: persist → serve → play
+
+### Persist (sidecar JSON, not in the markdown) — `note_generator.py`
+The human-readable note `Transcricao - <folder>.md` stays exactly as today
+(`**[MM:SS]** texto`). When **any** segment has `words`, `write_transcription`
+also writes a sidecar next to it:
+```python
+words_path = paths.raw_path.with_suffix(".words.json")   # "Transcricao - <folder>.words.json"
+if any(s.words for s in transcript.segments):
+    write_json_atomic(words_path, [s.model_dump() for s in transcript.segments])
+```
+Each entry: `{start, end, text, speaker, words: [{start, end, text}, ...]}`. No
+sidecar is written for the openai/cpp backends (words `None`) — graceful absence.
+
+### Serve — `web/app.py`
+`GET /api/meetings/{meeting_id}/words`: validate via `_reunioes_dir` (like the
+`/media` + `/source` endpoints); find `Transcricao - *.words.json` in the meeting
+dir; return its parsed JSON, or **404** when absent. No new model on the wire —
+it's the segment list with words.
+
+### Play — `frontend/src/components/TranscriptPlayer.tsx`
+- A `useMeetingWords(id)` hook fetches `/api/meetings/{id}/words` (tolerates 404 →
+  `null`).
+- When the words payload is present, `TranscriptPlayer` renders **structured**
+  segments: each segment's text becomes inline word `<span>`s; clicking a word
+  seeks the player to `word.start`; the word whose `[start,end)` contains
+  `currentTime` gets a highlight class (karaoke), updated on `timeupdate`.
+- When the payload is **absent** (404 — openai fallback, older meetings, cpp), it
+  uses today's **segment-level** path unchanged (parse the markdown, seek per
+  `[MM:SS]`). `MeetingDetail` passes both the markdown and the (maybe-null) words.
+
 ## Testing (TDD; mocks — no model download in CI)
 
 `tests/test_faster_whisper.py`:
@@ -166,6 +226,19 @@ is removed (no other caller). Both threads read the same WAV read-only.
   `_transcribe_faster` (monkeypatch it to a sentinel).
 - **config**: `whisper_compute_type` default `"int8"`; `whisper_backend` default
   `"faster"`; `MEETING_WHISPER_COMPUTE_TYPE` env override.
+- **words capture**: the fake `WhisperModel` segment exposes `.words` (e.g. `oi`
+  at 0–0.5) → the resulting `TranscriptSegment.words` has the `WordTime`; a segment
+  with no `.words` → `words is None`.
+
+`tests/test_word_timestamps.py`:
+- **sidecar write**: a `Transcript` whose segments carry `words` → `write_transcription`
+  creates `Transcricao - <folder>.words.json` containing the segments+words; a
+  transcript with all `words=None` → **no** sidecar file.
+- **`/api/meetings/{id}/words`**: with a seeded `*.words.json` → `200` + the JSON;
+  without it → `404`.
+- **frontend (`wordTimestamps.test.tsx`)**: `TranscriptPlayer` given a words payload
+  renders word `<span>`s and seeks to `word.start` on click; given `null` words it
+  renders the existing segment-level view (no regression).
 
 `tests/test_parallel_diarization.py`:
 - **disabled**: `enable_diarization=False` → `_start_diarization` returns None;
@@ -181,8 +254,13 @@ WhatsApp recording → prints segments, proving the backend transcribes end-to-e
 
 ## Out of scope
 
-- WhisperX / word-level timestamps.
+- **WhisperX** (we get word timestamps natively from faster-whisper instead).
+- **Voice identification** (matching a voice to a known person via enrolled
+  voiceprints) — a **future cycle**, built later on top of manual speaker-renaming;
+  this spec only does anonymous diarization (`Falante N`) + word times.
 - Removing `openai-whisper` (kept as fallback).
-- whisper.cpp Metal bundling; GPU/Metal for CTranslate2 (CPU int8 only).
-- Changing the summary / clickable transcript / note format.
+- whisper.cpp Metal bundling; GPU/Metal for CTranslate2 (CPU int8 only); capturing
+  word times from the openai/cpp backends (faster-whisper only).
+- Changing the **markdown** transcript note format (words live in a sidecar JSON);
+  changing the summary.
 - Parallelism beyond the one diarization thread.
