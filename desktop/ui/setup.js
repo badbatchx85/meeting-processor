@@ -7,7 +7,10 @@ const checksEl = document.getElementById("checks");
 const actionEl = document.getElementById("action");
 const logEl = document.getElementById("log");
 
-const LABELS = { brew: "Homebrew", python311: "Python 3.11", ffmpeg: "ffmpeg", venv: "Ambiente Python" };
+function labelsFor(os) {
+  const base = { python311: "Python 3.11", ffmpeg: "ffmpeg", venv: "Ambiente Python" };
+  return os === "windows" ? base : { brew: "Homebrew", ...base };
+}
 
 listen("setup://log", (e) => {
   logEl.hidden = false;
@@ -17,7 +20,7 @@ listen("setup://log", (e) => {
 
 function renderChecks(p) {
   checksEl.innerHTML = "";
-  for (const [key, label] of Object.entries(LABELS)) {
+  for (const [key, label] of Object.entries(labelsFor(p.os))) {
     const li = document.createElement("li");
     const ok = p[key] === "ok";
     li.className = ok ? "ok" : "missing";
@@ -27,8 +30,9 @@ function renderChecks(p) {
 }
 
 function missingList(p) {
-  // venv is produced by bootstrap, not installed; brew/python311/ffmpeg are installable.
-  return ["brew", "python311", "ffmpeg"].filter((k) => p[k] !== "ok");
+  // venv is produced by bootstrap; brew/python311/ffmpeg are installable (no brew on Windows).
+  const keys = p.os === "windows" ? ["python311", "ffmpeg"] : ["brew", "python311", "ffmpeg"];
+  return keys.filter((k) => p[k] !== "ok");
 }
 
 async function launchServer() {
