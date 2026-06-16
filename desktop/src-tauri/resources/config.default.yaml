@@ -18,10 +18,11 @@ file_stable_seconds: 10
 
 # Whisper (transcrição)
 # whisper_backend:
-#   "auto"   -> usa whisper.cpp se encontrado, senão openai-whisper (pip). Padrão.
+#   "faster" -> faster-whisper (CTranslate2; padrão, ~4x mais rápido, fallback openai)
+#   "auto"   -> faster-whisper, senão whisper.cpp, senão openai-whisper
 #   "openai" -> openai-whisper puro Python; baixa o modelo sozinho (mais simples)
 #   "cpp"    -> força whisper.cpp (mais rápido com GPU; requer binário + modelo .bin)
-whisper_backend: "auto"
+whisper_backend: "faster"
 whisper_model: "large"
 whisper_language: "pt"
 whisper_device: "auto"
