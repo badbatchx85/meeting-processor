@@ -14,6 +14,11 @@ pub fn macos_python(data_dir: &Path) -> PathBuf {
     data_dir.join(".venv").join("bin").join("python")
 }
 
+/// Windows: the venv python created during bootstrap (Scripts\python.exe).
+pub fn windows_python(data_dir: &Path) -> PathBuf {
+    data_dir.join(".venv").join("Scripts").join("python.exe")
+}
+
 /// Linux: the relocatable python3.11 bundled in the AppImage.
 pub fn linux_python(appdir: &Path) -> PathBuf {
     appdir.join("usr").join("python").join("bin").join("python3.11")
@@ -32,18 +37,18 @@ pub fn linux_bin_dir(appdir: &Path) -> PathBuf {
 // ---- cfg-gated public interface ----
 
 /// Does this OS need the first-run detect/install/bootstrap flow?
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn needs_bootstrap() -> bool {
     true
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn needs_bootstrap() -> bool {
     false
 }
 
 /// The AppImage mount point. Falls back to "." when run outside an AppImage
 /// (e.g. a bare `cargo run` during Linux development).
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 fn appdir() -> PathBuf {
     std::env::var("APPDIR")
         .map(PathBuf::from)
@@ -55,17 +60,21 @@ fn appdir() -> PathBuf {
 pub fn python(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(macos_python(&crate::paths::data_dir(app)?))
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub fn python(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(windows_python(&crate::paths::data_dir(app)?))
+}
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 pub fn python(_app: &AppHandle) -> Result<PathBuf, String> {
     Ok(linux_python(&appdir()))
 }
 
 /// Directory to put on PYTHONPATH so `import meeting_processor` resolves.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn package_dir(app: &AppHandle) -> Result<PathBuf, String> {
     crate::paths::resource_dir(app)
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 pub fn package_dir(_app: &AppHandle) -> Result<PathBuf, String> {
     Ok(linux_package_dir(&appdir()))
 }
@@ -75,7 +84,11 @@ pub fn package_dir(_app: &AppHandle) -> Result<PathBuf, String> {
 pub fn extra_path() -> String {
     crate::paths::shell_path()
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub fn extra_path() -> String {
+    std::env::var("PATH").unwrap_or_default()
+}
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 pub fn extra_path() -> String {
     let bin = linux_bin_dir(&appdir());
     match std::env::var("PATH") {
@@ -109,5 +122,12 @@ mod tests {
     #[test]
     fn linux_bin_dir_is_usr_bin() {
         assert_eq!(linux_bin_dir(Path::new("/mnt/app")), Path::new("/mnt/app/usr/bin"));
+    }
+
+    #[test]
+    fn windows_python_is_under_data_scripts() {
+        let p = windows_python(Path::new("/data"));
+        assert!(p.ends_with("Scripts/python.exe"), "got {p:?}");
+        assert!(p.starts_with("/data/.venv"));
     }
 }

@@ -7,6 +7,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 /// Shared handle to the running server child, stored in Tauri state.
 #[derive(Default)]
@@ -109,8 +111,16 @@ pub fn kill(state: &ServerProcess) {
     let child = state.0.lock().unwrap().take();
     if let Some(mut child) = child {
         // SIGTERM for a graceful shutdown.
+        #[cfg(unix)]
         unsafe {
             libc::kill(child.id() as libc::pid_t, libc::SIGTERM);
+        }
+        #[cfg(windows)]
+        {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/PID", &child.id().to_string(), "/T", "/F"])
+                .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+                .status();
         }
         // Give it up to ~3s to exit on its own.
         for _ in 0..30 {

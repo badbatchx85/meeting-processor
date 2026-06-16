@@ -23,8 +23,13 @@ pub fn resource_dir(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// The venv python created during bootstrap.
+#[cfg(not(target_os = "windows"))]
 pub fn venv_python(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir(app)?.join(".venv").join("bin").join("python"))
+}
+#[cfg(target_os = "windows")]
+pub fn venv_python(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(data_dir(app)?.join(".venv").join("Scripts").join("python.exe"))
 }
 
 /// A PATH that includes the Homebrew bins.
