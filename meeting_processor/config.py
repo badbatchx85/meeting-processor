@@ -31,10 +31,12 @@ class Settings(BaseModel):
     whisper_device: str = "cpu"
     whisper_initial_prompt: str = "Transcrição de reunião em português brasileiro."
     # Backend de transcrição:
-    #   "auto"   -> usa whisper.cpp se encontrado, senão openai-whisper (pip)
-    #   "cpp"    -> força whisper.cpp (mais rápido com GPU)
-    #   "openai" -> força openai-whisper (Python puro, baixa o modelo sozinho)
-    whisper_backend: str = "auto"
+    #   "faster" -> faster-whisper (CTranslate2; padrão, ~4x, fallback openai)
+    #   "auto"   -> faster-whisper, senão whisper.cpp, senão openai-whisper
+    #   "cpp"    -> força whisper.cpp
+    #   "openai" -> força openai-whisper
+    whisper_backend: str = "faster"
+    whisper_compute_type: str = "int8"  # int8 (rápido/baixa RAM) | auto | int8_float16
     # Adaptativo: escolhe o modelo Whisper pela duração do áudio (ver
     # transcriber.select_whisper_model). Off => usa whisper_model fixo.
     whisper_adaptive: bool = False
@@ -215,6 +217,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_WHISPER_LANGUAGE": "whisper_language",
         "MEETING_WHISPER_DEVICE": "whisper_device",
         "MEETING_WHISPER_BACKEND": "whisper_backend",
+        "MEETING_WHISPER_COMPUTE_TYPE": "whisper_compute_type",
         "MEETING_WHISPER_CLI_PATH": "whisper_cli_path",
         "MEETING_WHISPER_MODEL_PATH": "whisper_model_path",
         "MEETING_ANTHROPIC_MODEL": "anthropic_model",

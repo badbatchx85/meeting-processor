@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from .config import Settings
-from .models import Transcript, TranscriptSegment
+from .models import Transcript, TranscriptSegment, WordTime
 from .utils import parse_timestamp
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,14 @@ def select_whisper_model(duration_s: float, configured_model: str) -> str:
         if duration_s <= limit:
             return model
     return "small"
+
+
+_FASTER_NAMES = {"large": "large-v3"}
+
+
+def _faster_model_name(name: str) -> str:
+    """openai-whisper -> id do faster-whisper (large -> large-v3); resto passa direto."""
+    return _FASTER_NAMES.get(name, name)
 
 
 def _debug_logger(config: Settings) -> logging.Logger:
@@ -145,16 +153,18 @@ class WhisperTranscriber:
         ``model`` sobrescreve ``config.whisper_model`` apenas no backend
         openai-whisper (o whisper.cpp usa um .bin fixo e ignora o override).
         """
-        backend = (self.config.whisper_backend or "auto").lower()
-        cli = resolve_whisper_cli(self.config)
-
+        backend = (self.config.whisper_backend or "faster").lower()
         if backend == "openai":
             return self._transcribe_openai(audio_path, progress_callback, model)
         if backend == "cpp":
             return self._transcribe_cpp(audio_path, progress_callback)
-
-        # auto: whisper.cpp se disponível, senão openai-whisper
-        if cli is not None and resolve_whisper_model(self.config) is not None:
+        if backend == "faster":
+            return self._transcribe_faster(audio_path, progress_callback, model)
+        # auto: faster-whisper, senão whisper.cpp, senão openai
+        import importlib.util
+        if importlib.util.find_spec("faster_whisper") is not None:
+            return self._transcribe_faster(audio_path, progress_callback, model)
+        if resolve_whisper_cli(self.config) is not None and resolve_whisper_model(self.config) is not None:
             return self._transcribe_cpp(audio_path, progress_callback)
         logger.info("whisper.cpp nao encontrado; usando openai-whisper (pip).")
         return self._transcribe_openai(audio_path, progress_callback, model)
@@ -250,6 +260,59 @@ class WhisperTranscriber:
             full_text=full_text,
             language=self.config.whisper_language,
             duration=duration,
+        )
+
+    # -- Backend: faster-whisper (CTranslate2) --------------------------------
+
+    def _transcribe_faster(self, audio_path, progress_callback=None, model=None):
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError:
+            logger.warning("faster-whisper não instalado; usando openai-whisper.")
+            return self._transcribe_openai(audio_path, progress_callback, model)
+
+        model_name = _faster_model_name(model or self.config.whisper_model)
+        ctx = {"model": model_name}
+        try:
+            wm = WhisperModel(
+                model_name,
+                device=self.config.whisper_device,
+                compute_type=self.config.whisper_compute_type,
+            )
+            if progress_callback:
+                progress_callback(15, "Transcrevendo áudio (faster-whisper)...")
+            seg_iter, info = wm.transcribe(
+                str(audio_path),
+                language=self.config.whisper_language,
+                initial_prompt=self.config.whisper_initial_prompt or None,
+                vad_filter=True,
+                word_timestamps=True,
+            )
+            segments = []
+            for s in seg_iter:
+                text = (s.text or "").strip()
+                if not text:
+                    continue
+                words = [
+                    WordTime(start=float(w.start), end=float(w.end), text=(w.word or "").strip())
+                    for w in (getattr(s, "words", None) or [])
+                    if (w.word or "").strip()
+                ] or None
+                segments.append(
+                    TranscriptSegment(start=float(s.start), end=float(s.end), text=text, words=words)
+                )
+        except Exception as e:  # noqa: BLE001
+            _log_run_failure(self.config, "faster", ctx, e)
+            raise
+
+        duration = float(getattr(info, "duration", 0.0)) or (segments[-1].end if segments else 0.0)
+        full_text = " ".join(s.text for s in segments)
+        if progress_callback:
+            progress_callback(100, f"{len(segments)} segmentos, {duration/60:.1f} min")
+        logger.info("Transcrição (faster-whisper): %d segmentos, %.1f min.", len(segments), duration / 60)
+        return Transcript(
+            segments=segments, full_text=full_text,
+            language=self.config.whisper_language, duration=duration,
         )
 
     # -- Backend: whisper.cpp (binário) --------------------------------------
