@@ -17,6 +17,7 @@ import sys
 from unittest.mock import patch
 
 import httpx
+import pytest
 
 from meeting_processor.config import load_config
 from meeting_processor.models import Transcript, TranscriptSegment
@@ -51,6 +52,10 @@ def test_factory_selects_ollama() -> None:
     print("OK  factory -> OllamaSummarizer (env=local)")
 
 
+@pytest.mark.skipif(
+    not os.environ.get("ANTHROPIC_API_KEY"),
+    reason="requer ANTHROPIC_API_KEY (o construtor do AnthropicSummarizer falha sem ela)",
+)
 def test_factory_selects_anthropic() -> None:
     os.environ["MEETING_LLM_PROVIDER"] = "anthropic"
     cfg = load_config()
