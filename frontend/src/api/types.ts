@@ -58,4 +58,4 @@ export interface SourceInfo {
 }
 export interface WordTime { start: number; end: number; text: string; }
 export interface WordSegment { start: number; end: number; text: string; speaker: string | null; words: WordTime[] | null; }
-export interface SpeakerInfo { detected: string[]; names: Record<string, string>; }
+export interface SpeakerInfo { detected: string[]; names: Record<string, string>; suggestions: Record<string, string>; }

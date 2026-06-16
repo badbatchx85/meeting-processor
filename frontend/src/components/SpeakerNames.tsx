@@ -7,10 +7,12 @@ export function SpeakerNames({ meetingId }: { meetingId: string }) {
   const [names, setNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (sp.data) setNames(sp.data.names ?? {});
+    if (sp.data) setNames({ ...(sp.data.suggestions ?? {}), ...(sp.data.names ?? {}) });
   }, [sp.data]);
 
   const detected = sp.data?.detected ?? [];
+  const confirmed = sp.data?.names ?? {};
+  const suggestions = sp.data?.suggestions ?? {};
   if (detected.length === 0) return null;
 
   return (
@@ -26,6 +28,11 @@ export function SpeakerNames({ meetingId }: { meetingId: string }) {
               onChange={(e) => setNames((n) => ({ ...n, [label]: e.target.value }))}
               className="flex-1 rounded-md border border-line px-2 py-1 text-sm"
             />
+            {!confirmed[label] && suggestions[label] && (
+              <span className="shrink-0 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] uppercase tracking-label text-brand">
+                reconhecido
+              </span>
+            )}
           </label>
         ))}
       </div>
