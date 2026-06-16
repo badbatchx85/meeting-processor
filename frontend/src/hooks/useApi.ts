@@ -249,6 +249,7 @@ export const useMeetingSpeakers = (id: string) =>
   useQuery({
     queryKey: ["meeting-speakers", id],
     queryFn: () => api.get<import("../api/types").SpeakerInfo>(`/api/meetings/${encodeURIComponent(id)}/speakers`),
+    enabled: !!id,
   });
 
 export function useSetSpeakerNames(id: string) {
