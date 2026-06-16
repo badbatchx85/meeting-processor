@@ -83,3 +83,13 @@ def test_post_speakers_enrolls_voiceprint(client, config):
     client.post(f"/api/meetings/{mid}/speakers", json={"names": {"Falante 1": "Bruno"}})
     repo = vp.load_repo(config.vault_path)
     assert "Bruno" in repo and repo["Bruno"]["vector"] == [0.0, 1.0]
+
+
+def test_remove_embeddings(config):
+    d = config.reunioes_path / "rm"
+    d.mkdir(parents=True, exist_ok=True)
+    vp.write_embeddings(d / "Transcricao - rm.md", {"Falante 1": [1.0, 0.0]})
+    assert vp.read_meeting_embeddings(d) == {"Falante 1": [1.0, 0.0]}
+    vp.remove_embeddings(d)
+    assert vp.read_meeting_embeddings(d) == {}
+    vp.remove_embeddings(d)  # no-op when absent, no raise

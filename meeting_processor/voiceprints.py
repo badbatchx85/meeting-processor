@@ -93,6 +93,17 @@ def read_meeting_embeddings(meeting_dir: Path) -> dict:
         return {}
 
 
+def remove_embeddings(meeting_dir: Path) -> None:
+    """Remove o sidecar de embeddings da reunião, se existir (no-op se ausente).
+
+    Usado quando os rótulos de falante deixam de valer (ex.: re-transcrição sem
+    diarização), para manter o invariante "embeddings sempre batem com .words.json".
+    """
+    side = _embeddings_sidecar(meeting_dir)
+    if side is not None:
+        side.unlink(missing_ok=True)
+
+
 def suggest(meeting_dir: Path, vault: Path, threshold: float) -> dict:
     """{Falante N: nome reconhecido} para clusters que casam com o repositório."""
     embs = read_meeting_embeddings(meeting_dir)

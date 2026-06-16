@@ -78,6 +78,42 @@ def test_transcribe_existing_overwrites_and_logs(config, tmp_path, monkeypatch):
     assert entries and entries[0]["action"] == "transcript" and entries[0]["status"] == "ok"
 
 
+def test_transcribe_existing_removes_stale_embeddings(config, tmp_path, monkeypatch):
+    """Re-transcrição não diariza → embeddings antigos viram órfãos e são removidos."""
+    from meeting_processor.pipeline import MeetingPipeline
+
+    config.watch_dir = str(tmp_path / "watch")
+    mid = _make_meeting(config, "reuniao.mp4")
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads" / "reuniao.mp4").write_bytes(b"fake")
+
+    # Seed a stale embeddings sidecar from a previous (diarized) run.
+    meeting_dir = config.reunioes_path / mid
+    raw_md = next(meeting_dir.glob("Transcricao - *.md"))
+    stale = raw_md.with_suffix(".embeddings.json")
+    stale.write_text('{"Falante 1": [1.0, 0.0]}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        "meeting_processor.pipeline.extract_audio",
+        lambda src, cfg: tmp_path / "audio.wav",
+    )
+    (tmp_path / "audio.wav").write_bytes(b"x")
+
+    class _FakeTranscriber:
+        def __init__(self, *a, **k): ...
+        def transcribe(self, audio_path, progress_callback=None, **kwargs):
+            return Transcript(
+                segments=[TranscriptSegment(start=0.0, end=3.0, text="Novo.")],
+                full_text="Novo.", language="pt", duration=3.0,
+            )
+
+    monkeypatch.setattr("meeting_processor.pipeline.WhisperTranscriber", lambda cfg: _FakeTranscriber())
+
+    MeetingPipeline(config).transcribe_existing(mid)
+
+    assert not stale.exists()
+
+
 def test_transcribe_existing_no_source_logs_error(config, tmp_path):
     from meeting_processor import generation_log
     from meeting_processor.pipeline import MeetingPipeline

@@ -439,6 +439,11 @@ class MeetingPipeline:
             self._check_cancel()
             paths = self.note_generator.paths_for_existing(meeting_dir)
             self.note_generator.write_transcription(transcript, paths)
+            # Re-transcrição não roda diarização: os Falante N podem mudar de ordem,
+            # então os embeddings antigos ficam órfãos. Remove o sidecar para manter
+            # o invariante "embeddings sempre batem com os rótulos do .words.json".
+            from . import voiceprints
+            voiceprints.remove_embeddings(meeting_dir)
             detail = f"{len(transcript.segments)} segmentos, {format_duration(transcript.duration)}"
             job.complete(f"So transcricao | {detail}")
             self.dashboard.update(job)
