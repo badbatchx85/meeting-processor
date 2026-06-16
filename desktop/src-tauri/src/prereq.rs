@@ -17,6 +17,7 @@ pub struct Prerequisites {
     pub python311: Status,
     pub ffmpeg: Status,
     pub venv: Status,
+    pub os: String,
 }
 
 /// `python3.11 --version` prints e.g. "Python 3.11.9". Accept any 3.11.x.
@@ -85,5 +86,18 @@ mod tests {
     #[test]
     fn brew_ok() {
         assert_eq!(parse_brew_version("Homebrew 4.2.0"), Status::Ok);
+    }
+}
+
+#[cfg(test)]
+mod os_field_tests {
+    use super::*;
+    #[test]
+    fn prerequisites_carries_os() {
+        let p = Prerequisites {
+            brew: Status::Ok, python311: Status::Ok, ffmpeg: Status::Ok,
+            venv: Status::Ok, os: "windows".to_string(),
+        };
+        assert_eq!(p.os, "windows");
     }
 }

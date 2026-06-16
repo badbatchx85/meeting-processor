@@ -10,6 +10,15 @@ use tokio::process::Command;
 
 const BREW: &str = "/opt/homebrew/bin/brew"; // Apple Silicon; Intel is /usr/local/bin/brew
 
+#[cfg(target_os = "windows")]
+fn py_program() -> &'static str { "py" }
+#[cfg(target_os = "windows")]
+fn py_prefix() -> Vec<&'static str> { vec!["-3.11"] }
+#[cfg(not(target_os = "windows"))]
+fn py_program() -> &'static str { "python3.11" }
+#[cfg(not(target_os = "windows"))]
+fn py_prefix() -> Vec<&'static str> { vec![] }
+
 fn emit_log(app: &AppHandle, line: &str) {
     let _ = app.emit("setup://log", line.to_string());
 }
@@ -46,11 +55,21 @@ pub async fn check_prerequisites(app: AppHandle) -> Result<Prerequisites, String
             python311: Status::Ok,
             ffmpeg: Status::Ok,
             venv: Status::Ok,
+            os: std::env::consts::OS.to_string(),
         });
     }
 
-    let (brew_out, _) = capture(brew_path(), &["--version"]).await;
-    let (py_out, py_err) = capture("python3.11", &["--version"]).await;
+    #[cfg(target_os = "windows")]
+    let brew = Status::Ok; // sem Homebrew no Windows
+    #[cfg(not(target_os = "windows"))]
+    let brew = {
+        let (brew_out, _) = capture(brew_path(), &["--version"]).await;
+        parse_brew_version(&brew_out)
+    };
+
+    let mut py_args = py_prefix();
+    py_args.push("--version");
+    let (py_out, py_err) = capture(py_program(), &py_args).await;
     let (ff_out, _) = capture("ffmpeg", &["-version"]).await;
 
     let venv = if paths::venv_python(&app)?.exists() {
@@ -60,10 +79,11 @@ pub async fn check_prerequisites(app: AppHandle) -> Result<Prerequisites, String
     };
 
     Ok(Prerequisites {
-        brew: parse_brew_version(&brew_out),
+        brew,
         python311: parse_python_version(&py_out, &py_err),
         ffmpeg: parse_ffmpeg_version(&ff_out),
         venv,
+        os: std::env::consts::OS.to_string(),
     })
 }
 
@@ -126,8 +146,18 @@ pub async fn install_prerequisite(app: AppHandle, name: String) -> Result<(), St
             )
             .await
         }
-        "python311" => run_streamed(&app, brew_path(), &["install", "python@3.11"]).await,
-        "ffmpeg" => run_streamed(&app, brew_path(), &["install", "ffmpeg"]).await,
+        "python311" => {
+            #[cfg(target_os = "windows")]
+            { run_streamed(&app, "winget", &["install", "-e", "--id", "Python.Python.3.11"]).await }
+            #[cfg(not(target_os = "windows"))]
+            { run_streamed(&app, brew_path(), &["install", "python@3.11"]).await }
+        }
+        "ffmpeg" => {
+            #[cfg(target_os = "windows")]
+            { run_streamed(&app, "winget", &["install", "-e", "--id", "Gyan.FFmpeg"]).await }
+            #[cfg(not(target_os = "windows"))]
+            { run_streamed(&app, brew_path(), &["install", "ffmpeg"]).await }
+        }
         other => Err(format!("prerequisito desconhecido: {other}")),
     }
 }
@@ -149,8 +179,14 @@ pub async fn bootstrap_venv(app: AppHandle) -> Result<(), String> {
     }
 
     emit_log(&app, "Criando ambiente Python (.venv)…");
-    run_streamed(&app, "python3.11", &["-m", "venv", &venv.to_string_lossy()]).await?;
+    let venv_s = venv.to_string_lossy().to_string();
+    let mut venv_args = py_prefix();
+    venv_args.extend(["-m", "venv", venv_s.as_str()]);
+    run_streamed(&app, py_program(), &venv_args).await?;
 
+    #[cfg(target_os = "windows")]
+    let pip = venv.join("Scripts").join("pip.exe");
+    #[cfg(not(target_os = "windows"))]
     let pip = venv.join("bin").join("pip");
     emit_log(&app, "Instalando dependências (pode demorar)…");
     run_streamed(
