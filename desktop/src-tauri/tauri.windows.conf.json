@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "resources": {
+      "resources/meeting_processor": "meeting_processor",
+      "resources/requirements.txt": "requirements.txt",
+      "resources/config.default.yaml": "config.default.yaml"
+    }
+  }
+}
