@@ -143,6 +143,8 @@ class MeetingPipeline:
             self.dashboard.update(job)
             self._check_cancel()
 
+            diar = self._start_diarization(audio_path)
+
             # Etapa 2: Transcrever (sempre)
             logger.info("[2] Transcrevendo audio com Whisper...")
             whisper_model = self._effective_whisper_model(audio_path)
@@ -157,7 +159,7 @@ class MeetingPipeline:
             self.dashboard.update(job)
             self._check_cancel()
 
-            self._maybe_diarize(transcript, audio_path)
+            self._finish_diarization(diar, transcript)
 
             # Salvar transcrição no vault (sempre)
             paths = self.note_generator.prepare(video_path.name, created_at)
@@ -215,21 +217,33 @@ class MeetingPipeline:
                 audio_path.unlink()
                 logger.debug("Arquivo temporario removido: %s", audio_path)
 
-    def _maybe_diarize(self, transcript, audio_path) -> None:
-        """Atribui falantes aos segmentos quando a diarização está ligada.
-
-        Import preguiçoso (pyannote é opcional) e tudo embrulhado: a diarização
-        nunca derruba o pipeline.
-        """
+    def _start_diarization(self, audio_path):
+        """Submete a diarização a uma thread (roda junto com a transcrição)."""
         if not self.config.enable_diarization:
-            return
+            return None
         try:
-            from .diarizer import diarize, assign_speakers
-            turns = diarize(audio_path, self.config)
+            from concurrent.futures import ThreadPoolExecutor
+            from .diarizer import diarize
+            ex = ThreadPoolExecutor(max_workers=1)
+            return (ex, ex.submit(diarize, audio_path, self.config))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Falha ao iniciar diarizacao (nao critico): %s", e)
+            return None
+
+    def _finish_diarization(self, handle, transcript):
+        """Junta os turnos e atribui falantes. Nunca derruba o pipeline."""
+        if handle is None:
+            return
+        ex, fut = handle
+        try:
+            from .diarizer import assign_speakers
+            turns = fut.result()
             assign_speakers(transcript.segments, turns)
             logger.info("Diarizacao: %d turnos.", len(turns))
-        except Exception as e:  # noqa: BLE001 — nunca derruba o pipeline
+        except Exception as e:  # noqa: BLE001
             logger.warning("Falha na diarizacao (nao critico): %s", e)
+        finally:
+            ex.shutdown(wait=False)
 
     def _summarize(self, transcript, paths, source_file, created_at, job, steps, style=None):
         """Etapas 3-6 (resumo/nota/kanban/wiki) sobre um transcript + pasta.

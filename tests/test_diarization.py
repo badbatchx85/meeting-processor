@@ -106,7 +106,9 @@ def test_maybe_diarize_disabled(config):
     config.enable_diarization = False
     segs = [TranscriptSegment(start=0, end=1, text="oi")]
     t = Transcript(segments=segs, full_text="oi", language="pt", duration=1)
-    MeetingPipeline(config)._maybe_diarize(t, "/tmp/x.wav")
+    pipe = MeetingPipeline(config)
+    h = pipe._start_diarization("/tmp/x.wav")
+    pipe._finish_diarization(h, t)
     assert segs[0].speaker is None
 
 
@@ -115,5 +117,7 @@ def test_maybe_diarize_enabled(config, monkeypatch):
     monkeypatch.setattr(diarizer, "diarize", lambda audio, cfg: [(0.0, 1.0, "SPEAKER_00")])
     segs = [TranscriptSegment(start=0, end=1, text="oi")]
     t = Transcript(segments=segs, full_text="oi", language="pt", duration=1)
-    MeetingPipeline(config)._maybe_diarize(t, "/tmp/x.wav")
+    pipe = MeetingPipeline(config)
+    h = pipe._start_diarization("/tmp/x.wav")
+    pipe._finish_diarization(h, t)
     assert segs[0].speaker == "Falante 1"
