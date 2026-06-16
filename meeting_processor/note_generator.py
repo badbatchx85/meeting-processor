@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .config import Settings
 from .models import MeetingSummary, Transcript, TranscriptSegment
-from .utils import format_duration, format_timestamp, parse_timestamp, yaml_quote
+from .utils import format_duration, format_timestamp, parse_timestamp, write_json_atomic, yaml_quote
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +72,13 @@ class NoteGenerator:
         )
 
     def write_transcription(self, transcript: Transcript, paths: MeetingPaths) -> None:
-        """Salva a transcrição bruta (sempre, independe do resumo)."""
+        """Salva a transcrição bruta (sempre) + sidecar de palavras quando houver."""
         self._write_raw_transcription(transcript, paths.raw_path)
         logger.info("Transcricao bruta salva: %s", paths.raw_path)
+        if any(s.words for s in transcript.segments):
+            words_path = paths.raw_path.with_suffix(".words.json")
+            write_json_atomic(words_path, [s.model_dump() for s in transcript.segments])
+            logger.info("Timestamps por palavra salvos: %s", words_path)
 
     def read_transcription(self, path: Path) -> Transcript:
         """Reconstrói um ``Transcript`` a partir de ``Transcricao - *.md``.
