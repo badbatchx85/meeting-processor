@@ -68,3 +68,49 @@ def test_regenerate_md_idempotent(config):
     sn.regenerate_md(config, d, {"Falante 1": "Carlos"})        # re-rename
     text2 = md.read_text(encoding="utf-8")
     assert "Carlos: oi" in text2 and "Ana" not in text2        # no accumulation
+
+
+# --- Task 3: endpoints -----------------------------------------------------
+
+
+def _seed_meeting(config, folder, segs):
+    d = config.reunioes_path / folder
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"Transcricao - {folder}.md").write_text("# Transcricao\n\n**[00:00]** Falante 1: oi  \n", encoding="utf-8")
+    (d / f"Transcricao - {folder}.words.json").write_text(json.dumps(segs), encoding="utf-8")
+    return d
+
+
+def test_get_speakers_detected_and_names(client, config):
+    mid = "2026-01-01 10h00 - reu"
+    _seed_meeting(config, mid, [
+        {"start": 0, "end": 1, "text": "oi", "speaker": "Falante 1", "words": None},
+        {"start": 1, "end": 2, "text": "ola", "speaker": "Falante 2", "words": None},
+    ])
+    r = client.get(f"/api/meetings/{mid}/speakers")
+    assert r.status_code == 200
+    assert r.json()["detected"] == ["Falante 1", "Falante 2"]
+    assert r.json()["names"] == {}
+
+
+def test_post_speakers_persists_and_rewrites_md(client, config):
+    mid = "2026-01-02 10h00 - reu"
+    d = _seed_meeting(config, mid, [
+        {"start": 0, "end": 1, "text": "oi", "speaker": "Falante 1", "words": None},
+    ])
+    r = client.post(f"/api/meetings/{mid}/speakers", json={"names": {"Falante 1": "Ana"}})
+    assert r.status_code == 200
+    assert "Ana: oi" in (d / f"Transcricao - {mid}.md").read_text(encoding="utf-8")
+    side = json.loads((d / f"Transcricao - {mid}.words.json").read_text(encoding="utf-8"))
+    assert side[0]["speaker"] == "Falante 1"
+    assert client.get(f"/api/meetings/{mid}/speakers").json()["names"] == {"Falante 1": "Ana"}
+
+
+def test_words_endpoint_applies_names(client, config):
+    mid = "2026-01-03 10h00 - reu"
+    _seed_meeting(config, mid, [
+        {"start": 0, "end": 1, "text": "oi", "speaker": "Falante 1", "words": None},
+    ])
+    client.post(f"/api/meetings/{mid}/speakers", json={"names": {"Falante 1": "Ana"}})
+    served = client.get(f"/api/meetings/{mid}/words").json()
+    assert served[0]["speaker"] == "Ana"

@@ -32,6 +32,7 @@ from fastapi.templating import Jinja2Templates
 from ..config import Settings, load_config
 from ..dashboard import STAGES
 from ..utils import yaml_unquote
+from .. import speaker_names
 from . import meeting_export, spa_serving
 from .runtime import (
     VALID_PROVIDERS,
@@ -1315,7 +1316,28 @@ def create_app(config: Settings | None = None) -> FastAPI:
         hits = list(meeting_dir.glob("Transcricao - *.words.json"))
         if not hits:
             raise HTTPException(status_code=404, detail="Sem timestamps por palavra")
-        return json.loads(hits[0].read_text(encoding="utf-8"))
+        segments = json.loads(hits[0].read_text(encoding="utf-8"))
+        return speaker_names.apply_names(segments, speaker_names.read_names(meeting_dir))
+
+    @app.get("/api/meetings/{meeting_id}/speakers")
+    async def api_get_speakers(meeting_id: str):
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        return {
+            "detected": speaker_names.detected_labels(meeting_dir),
+            "names": speaker_names.read_names(meeting_dir),
+        }
+
+    @app.post("/api/meetings/{meeting_id}/speakers")
+    async def api_set_speakers(meeting_id: str, payload: dict):
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        names = (payload or {}).get("names") or {}
+        speaker_names.write_names(meeting_dir, names)
+        speaker_names.regenerate_md(config, meeting_dir, speaker_names.read_names(meeting_dir))
+        return {"ok": True}
 
     @app.delete("/api/meetings/{meeting_id}/source")
     async def api_delete_meeting_source(meeting_id: str):
