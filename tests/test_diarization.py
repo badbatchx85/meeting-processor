@@ -57,7 +57,7 @@ def test_diarize_graceful_when_pyannote_missing(config, monkeypatch):
         return real_import(name, *a, **k)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    assert diarizer.diarize("/tmp/does-not-matter.wav", config) == []
+    assert diarizer.diarize("/tmp/does-not-matter.wav", config) == ([], {})
 
 
 # --- Task 3: rendering ------------------------------------------------------
@@ -121,3 +121,37 @@ def test_maybe_diarize_enabled(config, monkeypatch):
     h = pipe._start_diarization("/tmp/x.wav")
     pipe._finish_diarization(h, t)
     assert segs[0].speaker == "Falante 1"
+
+
+# --- Sub-project B: embeddings + friendly map ------------------------------
+
+
+class _FakeTurnB:
+    def __init__(self, s, e):
+        self.start, self.end = s, e
+
+
+class _FakeAnnB:
+    def labels(self):
+        return ["SPEAKER_00", "SPEAKER_01"]
+    def itertracks(self, yield_label=True):
+        yield _FakeTurnB(0, 1), "_", "SPEAKER_00"
+        yield _FakeTurnB(1, 2), "_", "SPEAKER_01"
+
+
+def test_parse_diarization_tuple_form():
+    turns, emb = diarizer._parse_diarization((_FakeAnnB(), [[1.0, 2.0], [3.0, 4.0]]))
+    assert turns == [(0, 1, "SPEAKER_00"), (1, 2, "SPEAKER_01")]
+    assert emb == {"SPEAKER_00": [1.0, 2.0], "SPEAKER_01": [3.0, 4.0]}
+
+
+def test_parse_diarization_no_embeddings():
+    turns, emb = diarizer._parse_diarization((_FakeAnnB(), None))
+    assert len(turns) == 2 and emb == {}
+
+
+def test_assign_speakers_returns_friendly_map():
+    from meeting_processor.models import TranscriptSegment
+    segs = [TranscriptSegment(start=0, end=1, text="a")]
+    friendly = diarizer.assign_speakers(segs, [(0.0, 1.0, "SPEAKER_00")])
+    assert friendly == {"SPEAKER_00": "Falante 1"}
