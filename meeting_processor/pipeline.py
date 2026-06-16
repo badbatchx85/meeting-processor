@@ -159,11 +159,13 @@ class MeetingPipeline:
             self.dashboard.update(job)
             self._check_cancel()
 
-            self._finish_diarization(diar, transcript)
+            voiceprints_emb = self._finish_diarization(diar, transcript)
 
             # Salvar transcrição no vault (sempre)
             paths = self.note_generator.prepare(video_path.name, created_at)
             self.note_generator.write_transcription(transcript, paths)
+            from . import voiceprints
+            voiceprints.write_embeddings(paths.raw_path, voiceprints_emb)
 
             # Etapas 3-6: resumo/nota/kanban/wiki (opcionais) — caminho único.
             summary = self._summarize(
@@ -230,18 +232,21 @@ class MeetingPipeline:
             logger.warning("Falha ao iniciar diarizacao (nao critico): %s", e)
             return None
 
-    def _finish_diarization(self, handle, transcript):
-        """Junta os turnos e atribui falantes. Nunca derruba o pipeline."""
+    def _finish_diarization(self, handle, transcript) -> dict:
+        """Junta turnos + embeddings, atribui falantes, devolve {Falante N: vetor}."""
         if handle is None:
-            return
+            return {}
         ex, fut = handle
         try:
             from .diarizer import assign_speakers
-            turns = fut.result()
-            assign_speakers(transcript.segments, turns)
-            logger.info("Diarizacao: %d turnos.", len(turns))
+            turns, emb_by_raw = fut.result()
+            friendly = assign_speakers(transcript.segments, turns)
+            emb = {friendly[raw]: vec for raw, vec in emb_by_raw.items() if raw in friendly}
+            logger.info("Diarizacao: %d turnos, %d voiceprints.", len(turns), len(emb))
+            return emb
         except Exception as e:  # noqa: BLE001
             logger.warning("Falha na diarizacao (nao critico): %s", e)
+            return {}
         finally:
             ex.shutdown(wait=False)
 

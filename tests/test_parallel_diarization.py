@@ -15,18 +15,20 @@ def test_diarization_disabled_noop(config):
     h = pipe._start_diarization("/tmp/x.wav")
     assert h is None
     t = _t()
-    pipe._finish_diarization(h, t)
+    assert pipe._finish_diarization(h, t) == {}
     assert t.segments[0].speaker is None
 
 
-def test_diarization_enabled_assigns(config, monkeypatch):
+def test_diarization_enabled_assigns_and_returns_embeddings(config, monkeypatch):
     config.enable_diarization = True
-    monkeypatch.setattr(diarizer, "diarize", lambda audio, cfg: [(0.0, 1.0, "SPEAKER_00")])
+    monkeypatch.setattr(diarizer, "diarize",
+                        lambda audio, cfg: ([(0.0, 1.0, "SPEAKER_00")], {"SPEAKER_00": [1.0, 2.0]}))
     pipe = MeetingPipeline(config)
     h = pipe._start_diarization("/tmp/x.wav")
     t = _t()
-    pipe._finish_diarization(h, t)
+    emb = pipe._finish_diarization(h, t)
     assert t.segments[0].speaker == "Falante 1"
+    assert emb == {"Falante 1": [1.0, 2.0]}        # re-keyed to friendly label
 
 
 def test_diarization_failure_is_swallowed(config, monkeypatch):
@@ -37,5 +39,5 @@ def test_diarization_failure_is_swallowed(config, monkeypatch):
     pipe = MeetingPipeline(config)
     h = pipe._start_diarization("/tmp/x.wav")
     t = _t()
-    pipe._finish_diarization(h, t)   # must not raise
+    assert pipe._finish_diarization(h, t) == {}    # must not raise; returns {}
     assert t.segments[0].speaker is None

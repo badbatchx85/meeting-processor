@@ -114,7 +114,8 @@ def test_maybe_diarize_disabled(config):
 
 def test_maybe_diarize_enabled(config, monkeypatch):
     config.enable_diarization = True
-    monkeypatch.setattr(diarizer, "diarize", lambda audio, cfg: [(0.0, 1.0, "SPEAKER_00")])
+    monkeypatch.setattr(diarizer, "diarize",
+                        lambda audio, cfg: ([(0.0, 1.0, "SPEAKER_00")], {"SPEAKER_00": [1.0, 2.0]}))
     segs = [TranscriptSegment(start=0, end=1, text="oi")]
     t = Transcript(segments=segs, full_text="oi", language="pt", duration=1)
     pipe = MeetingPipeline(config)
