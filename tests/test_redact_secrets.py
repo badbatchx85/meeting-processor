@@ -7,14 +7,15 @@ from meeting_processor.utils import redact_secrets
 
 
 def test_redacts_url_key():
+    # Fake, clearly-non-real value — never put a live key in a fixture.
     s = (
         "Falha ao chamar o Gemini: 429 for url "
         "'https://generativelanguage.googleapis.com/v1beta/models/"
         "gemini-2.0-flash:generateContent"
-        "?key=DUMMY_test_key'"
+        "?key=DUMMY_test_key_not_a_real_secret_000'"
     )
     out = redact_secrets(s)
-    assert "DUMMY_test_key" not in out
+    assert "DUMMY_test_key_not_a_real_secret_000" not in out
     assert "key=REDACTED" in out
 
 
