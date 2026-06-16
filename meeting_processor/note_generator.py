@@ -75,7 +75,7 @@ class NoteGenerator:
         """Salva a transcrição bruta (sempre) + sidecar de palavras quando houver."""
         self._write_raw_transcription(transcript, paths.raw_path)
         logger.info("Transcricao bruta salva: %s", paths.raw_path)
-        if any(s.words for s in transcript.segments):
+        if any(s.words or s.speaker for s in transcript.segments):
             words_path = paths.raw_path.with_suffix(".words.json")
             write_json_atomic(words_path, [s.model_dump() for s in transcript.segments])
             logger.info("Timestamps por palavra salvos: %s", words_path)
