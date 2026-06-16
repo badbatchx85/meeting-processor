@@ -245,6 +245,25 @@ export const useMeetingWords = (id: string) =>
     },
   });
 
+export const useMeetingSpeakers = (id: string) =>
+  useQuery({
+    queryKey: ["meeting-speakers", id],
+    queryFn: () => api.get<import("../api/types").SpeakerInfo>(`/api/meetings/${encodeURIComponent(id)}/speakers`),
+  });
+
+export function useSetSpeakerNames(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (names: Record<string, string>) =>
+      api.post(`/api/meetings/${encodeURIComponent(id)}/speakers`, { names }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meeting", id] });
+      qc.invalidateQueries({ queryKey: ["meeting-words", id] });
+      qc.invalidateQueries({ queryKey: ["meeting-speakers", id] });
+    },
+  });
+}
+
 export function useDeleteMeetingSource() {
   const qc = useQueryClient();
   return useMutation({

@@ -15,6 +15,7 @@ import { ApiError } from "../api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { ActiveJob } from "../components/ActiveJob";
 import { TranscriptPlayer } from "../components/TranscriptPlayer";
+import { SpeakerNames } from "../components/SpeakerNames";
 
 type Tab = "summary" | "tasks" | "transcript";
 
@@ -198,8 +199,11 @@ export function MeetingDetail() {
           <p className="py-6 text-sm text-muted">Sem resumo ainda — use "Gerar resumo" acima.</p>
         ))}
         {tab === "transcript" && (
-          <TranscriptPlayer meetingId={id} markdown={d.transcricao_md}
-            hasSource={source.data?.exists ?? false} words={words.data ?? null} />
+          <>
+            <SpeakerNames meetingId={id} />
+            <TranscriptPlayer meetingId={id} markdown={d.transcricao_md}
+              hasSource={source.data?.exists ?? false} words={words.data ?? null} />
+          </>
         )}
         {tab === "tasks" && (
           <ul className="space-y-2">
