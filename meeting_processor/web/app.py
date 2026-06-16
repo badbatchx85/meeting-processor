@@ -1306,6 +1306,17 @@ def create_app(config: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Arquivo de origem indisponível")
         return FileResponse(src)
 
+    @app.get("/api/meetings/{meeting_id}/words")
+    async def api_meeting_words(meeting_id: str):
+        """Timestamps por palavra (sidecar .words.json), se houver."""
+        meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
+        if meeting_dir is None or not meeting_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Reunião não encontrada")
+        hits = list(meeting_dir.glob("Transcricao - *.words.json"))
+        if not hits:
+            raise HTTPException(status_code=404, detail="Sem timestamps por palavra")
+        return json.loads(hits[0].read_text(encoding="utf-8"))
+
     @app.delete("/api/meetings/{meeting_id}/source")
     async def api_delete_meeting_source(meeting_id: str):
         meeting_dir = _reunioes_dir(config.vault_path, meeting_id)
