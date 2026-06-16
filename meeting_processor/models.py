@@ -3,11 +3,18 @@
 from pydantic import BaseModel
 
 
+class WordTime(BaseModel):
+    start: float
+    end: float
+    text: str
+
+
 class TranscriptSegment(BaseModel):
     start: float
     end: float
     text: str
     speaker: str | None = None
+    words: list[WordTime] | None = None
 
     @property
     def display_text(self) -> str:
