@@ -44,6 +44,7 @@ class Settings(BaseModel):
     enable_diarization: bool = False
     hf_token: str = ""
     diarization_model: str = "pyannote/speaker-diarization-3.1"
+    voice_id_threshold: float = 0.45  # distância de cosseno; menor = match mais rígido
     # Caminhos do whisper.cpp. Vazio => detecta automaticamente no PATH
     # do sistema e em .whisper-cpp/ e .models/ dentro do projeto.
     whisper_cli_path: str = ""
@@ -249,6 +250,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_ANTHROPIC_TEMPERATURE": "anthropic_temperature",
         "MEETING_OPENAI_TEMPERATURE": "openai_temperature",
         "MEETING_GEMINI_TEMPERATURE": "gemini_temperature",
+        "MEETING_VOICE_ID_THRESHOLD": "voice_id_threshold",
     }
     for env_key, config_key in float_overrides.items():
         env_val = os.environ.get(env_key)
