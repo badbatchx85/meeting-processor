@@ -43,7 +43,9 @@ class Settings(BaseModel):
     # Diarização (quem falou) — opt-in, requer pyannote + token Hugging Face.
     enable_diarization: bool = False
     hf_token: str = ""
-    diarization_model: str = "pyannote/speaker-diarization-3.1"
+    # community-1 (pyannote 4.x) devolve DiarizeOutput com speaker_embeddings,
+    # necessário pro voice ID. O 3.1 não emite embeddings por este caminho.
+    diarization_model: str = "pyannote/speaker-diarization-community-1"
     voice_id_threshold: float = 0.45  # distância de cosseno; menor = match mais rígido
     # Caminhos do whisper.cpp. Vazio => detecta automaticamente no PATH
     # do sistema e em .whisper-cpp/ e .models/ dentro do projeto.

@@ -15,7 +15,12 @@ def _parse_diarization(result):
         ann, emb = result
     else:
         ann = getattr(result, "speaker_diarization", result)
-        emb = getattr(result, "embeddings", None)
+        # pyannote 4.x DiarizeOutput expõe os vetores em `speaker_embeddings`
+        # ((num_speakers, dim), na ordem de speaker_diarization.labels()).
+        # `embeddings` é fallback p/ APIs antigas que usavam esse nome.
+        emb = getattr(result, "speaker_embeddings", None)
+        if emb is None:
+            emb = getattr(result, "embeddings", None)
     ann = getattr(ann, "speaker_diarization", ann)
     labels = list(ann.labels())
     turns = [(t.start, t.end, lbl) for t, _, lbl in ann.itertracks(yield_label=True)]
@@ -49,10 +54,9 @@ def diarize(audio_path, config: Settings) -> tuple[list[tuple[float, float, str]
             return [], {}
         if torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
-        try:
-            result = pipeline(str(audio_path), return_embeddings=True)
-        except TypeError:
-            result = pipeline(str(audio_path))
+        # pyannote 4.x já devolve um DiarizeOutput com speaker_embeddings; o antigo
+        # kwarg return_embeddings é ignorado (só gera warning), então não o passamos.
+        result = pipeline(str(audio_path))
         return _parse_diarization(result)
     except Exception as e:  # noqa: BLE001 — diarizacao nunca derruba o pipeline
         logger.warning("Falha na diarizacao (%s). Seguindo sem falantes.", e)
