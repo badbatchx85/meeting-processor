@@ -24,6 +24,18 @@ def test_diarization_env_overrides(monkeypatch, tmp_path):
     assert cfg.hf_token == "hf_abc"
 
 
+def test_voice_id_auto_threshold_default(config):
+    assert config.voice_id_auto_threshold == 0.30
+
+
+def test_voice_id_auto_threshold_env_override(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MEETING_VOICE_ID_AUTO_THRESHOLD", "0.25")
+    from meeting_processor.config import load_config
+    cfg = load_config()
+    assert cfg.voice_id_auto_threshold == 0.25
+
+
 # --- Task 2: diarizer -------------------------------------------------------
 
 from meeting_processor import diarizer
