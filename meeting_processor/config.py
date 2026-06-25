@@ -47,6 +47,9 @@ class Settings(BaseModel):
     # necessário pro voice ID. O 3.1 não emite embeddings por este caminho.
     diarization_model: str = "pyannote/speaker-diarization-community-1"
     voice_id_threshold: float = 0.45  # distância de cosseno; menor = match mais rígido
+    # Auto-resolve de identidade: aplica o nome reconhecido sem passo humano quando
+    # a distância é < este valor (mais rígido que voice_id_threshold, o de sugestão).
+    voice_id_auto_threshold: float = 0.30
     # Caminhos do whisper.cpp. Vazio => detecta automaticamente no PATH
     # do sistema e em .whisper-cpp/ e .models/ dentro do projeto.
     whisper_cli_path: str = ""
@@ -253,6 +256,7 @@ def load_config(config_path: str | None = None) -> Settings:
         "MEETING_OPENAI_TEMPERATURE": "openai_temperature",
         "MEETING_GEMINI_TEMPERATURE": "gemini_temperature",
         "MEETING_VOICE_ID_THRESHOLD": "voice_id_threshold",
+        "MEETING_VOICE_ID_AUTO_THRESHOLD": "voice_id_auto_threshold",
     }
     for env_key, config_key in float_overrides.items():
         env_val = os.environ.get(env_key)

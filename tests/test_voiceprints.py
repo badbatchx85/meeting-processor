@@ -93,3 +93,35 @@ def test_remove_embeddings(config):
     vp.remove_embeddings(d)
     assert vp.read_meeting_embeddings(d) == {}
     vp.remove_embeddings(d)  # no-op when absent, no raise
+
+
+def test_auto_resolve_matches_below_threshold(tmp_path):
+    from meeting_processor import voiceprints
+    repo = voiceprints.enroll({}, "Ana", [1.0, 0.0])
+    voiceprints.save_repo(tmp_path, repo)
+    out = voiceprints.auto_resolve({"Falante 1": [1.0, 0.0]}, tmp_path, 0.30)
+    assert out == {"Falante 1": "Ana"}
+
+
+def test_auto_resolve_skips_when_above_threshold(tmp_path):
+    from meeting_processor import voiceprints
+    repo = voiceprints.enroll({}, "Ana", [1.0, 0.0])
+    voiceprints.save_repo(tmp_path, repo)
+    # vetor ortogonal => distância de cosseno = 1.0, acima de qualquer threshold
+    out = voiceprints.auto_resolve({"Falante 1": [0.0, 1.0]}, tmp_path, 0.30)
+    assert out == {}
+
+
+def test_auto_resolve_empty_inputs(tmp_path):
+    from meeting_processor import voiceprints
+    assert voiceprints.auto_resolve({}, tmp_path, 0.30) == {}
+    assert voiceprints.auto_resolve({"Falante 1": [1.0]}, tmp_path, 0.30) == {}
+
+
+def test_auto_resolve_is_read_only(tmp_path):
+    from meeting_processor import voiceprints
+    repo = voiceprints.enroll({}, "Ana", [1.0, 0.0])
+    voiceprints.save_repo(tmp_path, repo)
+    before = voiceprints.load_repo(tmp_path)["Ana"]["count"]
+    voiceprints.auto_resolve({"Falante 1": [1.0, 0.0]}, tmp_path, 0.30)
+    assert voiceprints.load_repo(tmp_path)["Ana"]["count"] == before

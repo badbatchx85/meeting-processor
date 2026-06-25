@@ -98,3 +98,14 @@ def regenerate_md(config: Settings, meeting_dir: Path, names: dict) -> None:
     raw_path = ng.paths_for_existing(meeting_dir).raw_path
     ng._write_raw_transcription(transcript, raw_path)
     logger.info("Transcricao reescrita com nomes: %s", raw_path)
+
+
+def apply_speaker_map(segments: list, mapping: dict[str, str]) -> None:
+    """Renomeia ``segment.speaker`` in place para os labels presentes em ``mapping``.
+
+    In-memory (objetos TranscriptSegment), distinto de ``apply_names`` que opera
+    sobre segmentos-dict para a reescrita do .md pós-fato.
+    """
+    for seg in segments:
+        if seg.speaker in mapping:
+            seg.speaker = mapping[seg.speaker]

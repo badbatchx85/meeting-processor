@@ -24,6 +24,18 @@ def test_diarization_env_overrides(monkeypatch, tmp_path):
     assert cfg.hf_token == "hf_abc"
 
 
+def test_voice_id_auto_threshold_default(config):
+    assert config.voice_id_auto_threshold == 0.30
+
+
+def test_voice_id_auto_threshold_env_override(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MEETING_VOICE_ID_AUTO_THRESHOLD", "0.25")
+    from meeting_processor.config import load_config
+    cfg = load_config()
+    assert cfg.voice_id_auto_threshold == 0.25
+
+
 # --- Task 2: diarizer -------------------------------------------------------
 
 from meeting_processor import diarizer
@@ -172,3 +184,50 @@ def test_assign_speakers_returns_friendly_map():
     segs = [TranscriptSegment(start=0, end=1, text="a")]
     friendly = diarizer.assign_speakers(segs, [(0.0, 1.0, "SPEAKER_00")])
     assert friendly == {"SPEAKER_00": "Falante 1"}
+
+
+def test_resolve_identities_auto_names_high_confidence(config, tmp_path):
+    from meeting_processor import voiceprints
+    from meeting_processor.pipeline import MeetingPipeline
+    config.enable_diarization = True
+    repo = voiceprints.enroll({}, "Ana", [1.0, 2.0, 3.0])
+    voiceprints.save_repo(config.vault_path, repo)
+    segs = [TranscriptSegment(start=0, end=1, text="oi", speaker="Falante 1")]
+    t = Transcript(segments=segs, full_text="oi", language="pt", duration=1)
+    emb = MeetingPipeline(config)._resolve_identities(t, {"Falante 1": [1.0, 2.0, 3.0]})
+    assert segs[0].speaker == "Ana"
+    assert emb == {"Ana": [1.0, 2.0, 3.0]}
+
+
+def test_resolve_identities_noop_when_no_match(config, tmp_path):
+    from meeting_processor import voiceprints
+    from meeting_processor.pipeline import MeetingPipeline
+    config.enable_diarization = True
+    repo = voiceprints.enroll({}, "Ana", [1.0, 0.0])
+    voiceprints.save_repo(config.vault_path, repo)
+    segs = [TranscriptSegment(start=0, end=1, text="oi", speaker="Falante 1")]
+    t = Transcript(segments=segs, full_text="oi", language="pt", duration=1)
+    emb = MeetingPipeline(config)._resolve_identities(t, {"Falante 1": [0.0, 1.0]})
+    assert segs[0].speaker == "Falante 1"
+    assert emb == {"Falante 1": [0.0, 1.0]}
+
+
+def test_resolve_identities_empty_emb(config):
+    from meeting_processor.pipeline import MeetingPipeline
+    assert MeetingPipeline(config)._resolve_identities(None, {}) == {}
+
+
+def test_resolve_identities_clamps_auto_to_suggest(config):
+    from meeting_processor import voiceprints
+    from meeting_processor.pipeline import MeetingPipeline
+    config.enable_diarization = True
+    config.voice_id_threshold = 0.45
+    config.voice_id_auto_threshold = 0.99  # misconfig: mais frouxo que o suggest
+    voiceprints.save_repo(config.vault_path, voiceprints.enroll({}, "Ana", [1.0, 0.0]))
+    segs = [TranscriptSegment(start=0, end=1, text="oi", speaker="Falante 1")]
+    t = Transcript(segments=segs, full_text="oi", language="pt", duration=1)
+    # [1.0, 1.732] está a distância de cosseno 0.5 de [1.0, 0.0]: acima de 0.45
+    # (suggest) e abaixo de 0.99 (auto solto). Com o clamp eff=0.45 => NÃO casa.
+    emb = MeetingPipeline(config)._resolve_identities(t, {"Falante 1": [1.0, 1.732]})
+    assert segs[0].speaker == "Falante 1"
+    assert emb == {"Falante 1": [1.0, 1.732]}

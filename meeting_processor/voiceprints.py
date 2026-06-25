@@ -104,17 +104,22 @@ def remove_embeddings(meeting_dir: Path) -> None:
         side.unlink(missing_ok=True)
 
 
-def suggest(meeting_dir: Path, vault: Path, threshold: float) -> dict:
-    """{Falante N: nome reconhecido} para clusters que casam com o repositório."""
-    embs = read_meeting_embeddings(meeting_dir)
-    if not embs:
+def auto_resolve(emb: dict, vault: Path, auto_threshold: float) -> dict:
+    """{label: nome reconhecido} para clusters que casam com o repositório abaixo de
+    ``auto_threshold``. Read-only: não enrola nem grava o repositório."""
+    if not emb:
         return {}
     repo = load_repo(vault)
     if not repo:
         return {}
     out = {}
-    for label, vec in embs.items():
-        name = match(repo, vec, threshold)
+    for label, vec in emb.items():
+        name = match(repo, vec, auto_threshold)
         if name:
             out[label] = name
     return out
+
+
+def suggest(meeting_dir: Path, vault: Path, threshold: float) -> dict:
+    """{Falante N: nome reconhecido} para clusters que casam com o repositório."""
+    return auto_resolve(read_meeting_embeddings(meeting_dir), vault, threshold)
