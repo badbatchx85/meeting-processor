@@ -33,3 +33,21 @@ describe("talkTime util", () => {
     expect(rows.every((r) => r.pct === 0)).toBe(true);
   });
 });
+
+import { render, screen } from "@testing-library/react";
+import { TalkTime } from "../components/TalkTime";
+
+describe("TalkTime component", () => {
+  it("renderiza uma linha por falante com nome e %", () => {
+    render(<TalkTime segments={[seg("Ana", 0, 60), seg("João", 60, 90)]} />);
+    expect(screen.getByText("Ana")).toBeInTheDocument();
+    expect(screen.getByText("João")).toBeInTheDocument();
+    expect(screen.getByText("67%")).toBeInTheDocument();
+    expect(screen.getByText("33%")).toBeInTheDocument();
+  });
+
+  it("não renderiza nada com menos de 2 falantes", () => {
+    const { container } = render(<TalkTime segments={[seg("Ana", 0, 60)]} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
