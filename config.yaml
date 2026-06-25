@@ -29,6 +29,20 @@ whisper_device: "auto"
 whisper_initial_prompt: "Transcrição de reunião em português brasileiro."
 
 # ----------------------------------------------------------
+# Diarização + Voice ID (quem falou) — opt-in
+# ----------------------------------------------------------
+# Requer pyannote (requirements-diarization.txt) + token Hugging Face no .env
+# (MEETING_HF_TOKEN) com as condições do modelo aceitas.
+# enable_diarization também pela env MEETING_ENABLE_DIARIZATION.
+enable_diarization: false
+# community-1 (pyannote 4.x) devolve embeddings por falante — necessário pro
+# voice ID. NÃO use "pyannote/speaker-diarization-3.1": ele não emite embeddings.
+diarization_model: "pyannote/speaker-diarization-community-1"
+# Distância de cosseno máxima p/ reconhecer uma voz conhecida (menor = mais rígido).
+# Validado: pessoas distintas ~0.87; ajuste via env MEETING_VOICE_ID_THRESHOLD.
+voice_id_threshold: 0.45
+
+# ----------------------------------------------------------
 # Provedor de LLM (resumo da reunião)
 # ----------------------------------------------------------
 # Valores: "anthropic" (Claude), "openai" (OpenAI/compatíveis),

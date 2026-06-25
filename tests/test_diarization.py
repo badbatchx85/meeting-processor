@@ -11,7 +11,7 @@ def test_segment_display_text():
 def test_diarization_config_defaults(config):
     assert config.enable_diarization is False
     assert config.hf_token == ""
-    assert config.diarization_model == "pyannote/speaker-diarization-3.1"
+    assert config.diarization_model == "pyannote/speaker-diarization-community-1"
 
 
 def test_diarization_env_overrides(monkeypatch, tmp_path):
@@ -149,6 +149,22 @@ def test_parse_diarization_tuple_form():
 def test_parse_diarization_no_embeddings():
     turns, emb = diarizer._parse_diarization((_FakeAnnB(), None))
     assert len(turns) == 2 and emb == {}
+
+
+class _FakeDiarizeOutput:
+    """Espelha o DiarizeOutput da pyannote 4.x: objeto com .speaker_diarization
+    + .speaker_embeddings (array (num_speakers, dim) na ordem de .labels())."""
+
+    def __init__(self, ann, embeddings):
+        self.speaker_diarization = ann
+        self.speaker_embeddings = embeddings
+
+
+def test_parse_diarization_object_form_pyannote4():
+    out = _FakeDiarizeOutput(_FakeAnnB(), [[1.0, 2.0], [3.0, 4.0]])
+    turns, emb = diarizer._parse_diarization(out)
+    assert turns == [(0, 1, "SPEAKER_00"), (1, 2, "SPEAKER_01")]
+    assert emb == {"SPEAKER_00": [1.0, 2.0], "SPEAKER_01": [3.0, 4.0]}
 
 
 def test_assign_speakers_returns_friendly_map():
