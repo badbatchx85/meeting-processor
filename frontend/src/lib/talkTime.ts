@@ -7,7 +7,7 @@ export interface TalkTimeRow {
 }
 
 export function talkTime(segments: WordSegment[] | null): TalkTimeRow[] {
-  if (!segments || segments.length === 0) return [];
+  if (!Array.isArray(segments) || segments.length === 0) return [];
   const totals = new Map<string, number>();
   for (const s of segments) {
     if (s.speaker == null) continue;

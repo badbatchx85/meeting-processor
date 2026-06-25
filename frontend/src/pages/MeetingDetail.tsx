@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ActiveJob } from "../components/ActiveJob";
 import { TranscriptPlayer } from "../components/TranscriptPlayer";
 import { SpeakerNames } from "../components/SpeakerNames";
+import { TalkTime } from "../components/TalkTime";
 
 type Tab = "summary" | "tasks" | "transcript";
 
@@ -201,6 +202,7 @@ export function MeetingDetail() {
         {tab === "transcript" && (
           <>
             <SpeakerNames meetingId={id} />
+            <TalkTime segments={words.data ?? []} />
             <TranscriptPlayer meetingId={id} markdown={d.transcricao_md}
               hasSource={source.data?.exists ?? false} words={words.data ?? null} />
           </>

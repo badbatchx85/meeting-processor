@@ -32,6 +32,10 @@ describe("talkTime util", () => {
     const rows = talkTime([seg("Ana", 0, 0), seg("João", 0, 0)]);
     expect(rows.every((r) => r.pct === 0)).toBe(true);
   });
+
+  it("devolve [] para entrada não-array (defensivo)", () => {
+    expect(talkTime({} as unknown as null)).toEqual([]);
+  });
 });
 
 import { render, screen } from "@testing-library/react";
