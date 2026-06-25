@@ -114,3 +114,15 @@ def test_words_endpoint_applies_names(client, config):
     client.post(f"/api/meetings/{mid}/speakers", json={"names": {"Falante 1": "Ana"}})
     served = client.get(f"/api/meetings/{mid}/words").json()
     assert served[0]["speaker"] == "Ana"
+
+
+def test_apply_speaker_map_renames_in_place():
+    from meeting_processor.models import TranscriptSegment
+    from meeting_processor import speaker_names
+    segs = [
+        TranscriptSegment(start=0, end=1, text="a", speaker="Falante 1"),
+        TranscriptSegment(start=1, end=2, text="b", speaker="Falante 2"),
+        TranscriptSegment(start=2, end=3, text="c", speaker=None),
+    ]
+    speaker_names.apply_speaker_map(segs, {"Falante 1": "Ana"})
+    assert [s.speaker for s in segs] == ["Ana", "Falante 2", None]
