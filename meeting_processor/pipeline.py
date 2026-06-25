@@ -161,6 +161,11 @@ class MeetingPipeline:
 
             voiceprints_emb = self._finish_diarization(diar, transcript)
 
+            # Auto-resolve falantes reconhecidos -> nomes reais ANTES de escrever a
+            # transcrição e rodar o resumo, para que assignee/kanban/rollup já saiam
+            # com a identidade real e consistente.
+            voiceprints_emb = self._resolve_identities(transcript, voiceprints_emb)
+
             # Salvar transcrição no vault (sempre)
             paths = self.note_generator.prepare(video_path.name, created_at)
             self.note_generator.write_transcription(transcript, paths)
@@ -249,6 +254,21 @@ class MeetingPipeline:
             return {}
         finally:
             ex.shutdown(wait=False)
+
+    def _resolve_identities(self, transcript, voiceprints_emb: dict) -> dict:
+        """Auto-nomeia falantes reconhecidos pelo voice-ID (alta confiança) para o
+        nome real, in place nos segmentos, ANTES do resumo. Devolve o emb com as
+        chaves remapeadas. Read-only (não enrola) e forward-only.
+        """
+        if not voiceprints_emb:
+            return voiceprints_emb
+        from . import voiceprints, speaker_names
+        eff = min(self.config.voice_id_auto_threshold, self.config.voice_id_threshold)
+        name_map = voiceprints.auto_resolve(voiceprints_emb, self.config.vault_path, eff)
+        if not name_map:
+            return voiceprints_emb
+        speaker_names.apply_speaker_map(transcript.segments, name_map)
+        return {name_map.get(k, k): v for k, v in voiceprints_emb.items()}
 
     def _summarize(self, transcript, paths, source_file, created_at, job, steps, style=None):
         """Etapas 3-6 (resumo/nota/kanban/wiki) sobre um transcript + pasta.
