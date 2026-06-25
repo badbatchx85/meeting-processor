@@ -86,7 +86,18 @@ pub fn extra_path() -> String {
 }
 #[cfg(target_os = "windows")]
 pub fn extra_path() -> String {
-    std::env::var("PATH").unwrap_or_default()
+    // A GUI app keeps the PATH it launched with, so a tool winget installs
+    // mid-session (e.g. the ffmpeg shim) isn't visible until the app restarts.
+    // Prepend winget's per-user Links dir (where it drops CLI shims) so freshly
+    // installed tools resolve immediately — mirrors what macOS does with brew.
+    let base = std::env::var("PATH").unwrap_or_default();
+    match std::env::var("LOCALAPPDATA") {
+        Ok(local) if !local.is_empty() => {
+            let links = format!("{local}\\Microsoft\\WinGet\\Links");
+            if base.is_empty() { links } else { format!("{links};{base}") }
+        }
+        _ => base,
+    }
 }
 #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 pub fn extra_path() -> String {

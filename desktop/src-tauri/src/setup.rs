@@ -2,12 +2,16 @@
 //! stdout/stderr lines to the webview via the `setup://log` event.
 use crate::paths;
 use crate::platform;
-use crate::prereq::{parse_brew_version, parse_ffmpeg_version, parse_python_version, Prerequisites, Status};
+use crate::prereq::{parse_ffmpeg_version, parse_python_version, Prerequisites, Status};
+#[cfg(not(target_os = "windows"))]
+use crate::prereq::parse_brew_version;
 use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+// Homebrew só existe no fluxo macOS; no Windows estes itens ficariam sem uso.
+#[cfg(not(target_os = "windows"))]
 const BREW: &str = "/opt/homebrew/bin/brew"; // Apple Silicon; Intel is /usr/local/bin/brew
 
 #[cfg(target_os = "windows")]
@@ -19,17 +23,32 @@ fn py_program() -> &'static str { "python3.11" }
 #[cfg(not(target_os = "windows"))]
 fn py_prefix() -> Vec<&'static str> { vec![] }
 
+/// winget install args, including the agreement/interactivity flags a spawned,
+/// non-interactive process needs — otherwise winget can block on a prompt or
+/// exit non-zero, which run_streamed would surface as a hard error.
+#[cfg(target_os = "windows")]
+fn winget_install(id: &str) -> Vec<&str> {
+    vec![
+        "install",
+        "-e",
+        "--id",
+        id,
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+        "--disable-interactivity",
+    ]
+}
+
 fn emit_log(app: &AppHandle, line: &str) {
     let _ = app.emit("setup://log", line.to_string());
 }
 
 async fn capture(cmd: &str, args: &[&str]) -> (String, String) {
-    match Command::new(cmd)
-        .args(args)
-        .env("PATH", platform::extra_path())
-        .output()
-        .await
-    {
+    let mut command = Command::new(cmd);
+    command.args(args).env("PATH", platform::extra_path());
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no console flash
+    match command.output().await {
         Ok(out) => (
             String::from_utf8_lossy(&out.stdout).to_string(),
             String::from_utf8_lossy(&out.stderr).to_string(),
@@ -38,6 +57,7 @@ async fn capture(cmd: &str, args: &[&str]) -> (String, String) {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 fn brew_path() -> &'static str {
     if std::path::Path::new(BREW).exists() {
         BREW
@@ -91,11 +111,15 @@ pub async fn check_prerequisites(app: AppHandle) -> Result<Prerequisites, String
 /// non-zero exit so the UI transitions to ERROR.
 async fn run_streamed(app: &AppHandle, program: &str, args: &[&str]) -> Result<(), String> {
     emit_log(app, &format!("$ {program} {}", args.join(" ")));
-    let mut child = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .env("PATH", platform::extra_path())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no console flash
+    let mut child = command
         .spawn()
         .map_err(|e| format!("falha ao iniciar {program}: {e}"))?;
 
@@ -148,13 +172,13 @@ pub async fn install_prerequisite(app: AppHandle, name: String) -> Result<(), St
         }
         "python311" => {
             #[cfg(target_os = "windows")]
-            { run_streamed(&app, "winget", &["install", "-e", "--id", "Python.Python.3.11"]).await }
+            { run_streamed(&app, "winget", &winget_install("Python.Python.3.11")).await }
             #[cfg(not(target_os = "windows"))]
             { run_streamed(&app, brew_path(), &["install", "python@3.11"]).await }
         }
         "ffmpeg" => {
             #[cfg(target_os = "windows")]
-            { run_streamed(&app, "winget", &["install", "-e", "--id", "Gyan.FFmpeg"]).await }
+            { run_streamed(&app, "winget", &winget_install("Gyan.FFmpeg")).await }
             #[cfg(not(target_os = "windows"))]
             { run_streamed(&app, brew_path(), &["install", "ffmpeg"]).await }
         }

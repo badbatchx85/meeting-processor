@@ -8,6 +8,9 @@
 # `npm run build` emits the SPA into meeting_processor/web/spa (per vite.config),
 # so staging the meeting_processor/ tree below captures the freshly built SPA.
 $ErrorActionPreference = "Stop"
+# $ErrorActionPreference="Stop" does NOT halt on a non-zero exit from a native
+# command (npm/npx) under Windows PowerShell 5.1, so check $LASTEXITCODE
+# explicitly after each — otherwise a failed SPA/tauri build ships silently.
 
 $Root    = (Resolve-Path "$PSScriptRoot\..").Path
 $Desktop = Join-Path $Root "desktop"
@@ -16,8 +19,12 @@ $Res     = Join-Path $Tauri "resources"
 
 Write-Host "==> 1/3 Building SPA"
 Push-Location (Join-Path $Root "frontend")
-if (-not (Test-Path "node_modules")) { npm ci }
+if (-not (Test-Path "node_modules")) {
+    npm ci
+    if ($LASTEXITCODE) { throw "npm ci failed ($LASTEXITCODE)" }
+}
 npm run build
+if ($LASTEXITCODE) { throw "npm run build failed ($LASTEXITCODE)" }
 Pop-Location
 
 Write-Host "==> 2/3 Staging Python payload into resources/"
@@ -29,6 +36,7 @@ Copy-Item (Join-Path $Root "requirements.txt") (Join-Path $Res "requirements.txt
 Write-Host "==> 3/3 tauri build (nsis)"
 Push-Location $Tauri
 npx --yes "@tauri-apps/cli@^2" build --config tauri.windows.conf.json --bundles nsis
+if ($LASTEXITCODE) { throw "tauri build failed ($LASTEXITCODE)" }
 Pop-Location
 
 Write-Host "Done. Installer:"

@@ -58,7 +58,8 @@ pub async fn start_server(
         .map_err(|e| format!("abrir desktop.log: {e}"))?;
     let log_err = log.try_clone().map_err(|e| format!("clonar log: {e}"))?;
 
-    let child = Command::new(&python)
+    let mut command = Command::new(&python);
+    command
         .args(["-m", "meeting_processor", "web", "--port", &port.to_string()])
         .env("MEETING_DATA_DIR", &data)
         // A Finder-launched .app has a minimal PATH; the server shells out to
@@ -82,7 +83,12 @@ pub async fn start_server(
         )
         .current_dir(&data)
         .stdout(Stdio::from(log))
-        .stderr(Stdio::from(log_err))
+        .stderr(Stdio::from(log_err));
+    // The python server is a console app; without this a GUI-launched Tauri app
+    // pops a black console window that lingers for the whole server lifetime.
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    let child = command
         .spawn()
         .map_err(|e| format!("falha ao iniciar o servidor: {e}"))?;
 
