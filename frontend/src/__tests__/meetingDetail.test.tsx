@@ -48,4 +48,16 @@ describe("MeetingDetail", () => {
     expect(md).toHaveAttribute("href", "/api/meetings/abc/export.md");
     expect(docx).toHaveAttribute("href", "/api/meetings/abc/export.docx");
   });
+
+  it("opens the transcript tab when a ?t= deep-link is present", async () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/meetings/abc?t=42"]}>
+          <Routes><Route path="/meetings/:id" element={<MeetingDetail />} /></Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText(/linha de transcrição/)).toBeInTheDocument();
+  });
 });

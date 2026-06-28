@@ -59,3 +59,4 @@ export interface SourceInfo {
 export interface WordTime { start: number; end: number; text: string; }
 export interface WordSegment { start: number; end: number; text: string; speaker: string | null; words: WordTime[] | null; }
 export interface SpeakerInfo { detected: string[]; names: Record<string, string>; suggestions: Record<string, string>; }
+export interface SearchResult { meeting_id: string; text: string; start: number; end: number; score: number; }

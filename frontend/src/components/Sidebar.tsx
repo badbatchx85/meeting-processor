@@ -1,9 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Video, KanbanSquare, Settings } from "lucide-react";
+import { LayoutDashboard, Video, KanbanSquare, Settings, Search } from "lucide-react";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/meetings", label: "Reuniões", icon: Video, end: false },
+  { to: "/search", label: "Busca", icon: Search, end: false },
   { to: "/tasks", label: "Tarefas", icon: KanbanSquare, end: false },
   { to: "/settings", label: "Configuração", icon: Settings, end: false },
 ];

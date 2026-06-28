@@ -10,6 +10,8 @@ from pathlib import Path
 from .audio import extract_audio, get_duration
 from .config import Settings
 from . import generation_log
+from . import ollama_service
+from . import search_index
 from .dashboard import Dashboard
 from .job_control import JobCancelled
 from .kanban import KanbanManager
@@ -172,6 +174,9 @@ class MeetingPipeline:
             from . import voiceprints
             voiceprints.write_embeddings(paths.raw_path, voiceprints_emb)
 
+            # Indexar para a busca semântica (opt-in, best-effort).
+            self._index_for_search(paths, transcript)
+
             # Etapas 3-6: resumo/nota/kanban/wiki (opcionais) — caminho único.
             summary = self._summarize(
                 transcript, paths, video_path.name, created_at, job, steps
@@ -269,6 +274,35 @@ class MeetingPipeline:
             return voiceprints_emb
         speaker_names.apply_speaker_map(transcript.segments, name_map)
         return {name_map.get(k, k): v for k, v in voiceprints_emb.items()}
+
+    def _index_for_search(self, paths, transcript) -> None:
+        """Indexa os trechos da transcrição para a busca semântica (opt-in).
+
+        Best-effort, igual à diarização: qualquer falha (Ollama off, etc.) loga
+        warning e segue — nunca derruba o pipeline. Re-transcrição reindexa
+        (``add_meeting`` substitui os chunks daquela reunião).
+        """
+        if not self.config.enable_search_index:
+            return
+        meeting_id = paths.meeting_dir.name
+        segments = [
+            {"start": s.start, "end": s.end, "text": s.text}
+            for s in transcript.segments
+        ]
+        chunks = search_index.chunk_segments(segments)
+        if not chunks:
+            return
+        try:
+            for ch in chunks:
+                ch["vector"] = ollama_service.embed(ch["text"], self.config)
+        except ollama_service.EmbeddingError as e:
+            logger.warning(
+                "Busca: não foi possível indexar '%s' (Ollama indisponível: %s). "
+                "Reindexe depois pela interface.", meeting_id, e,
+            )
+            return
+        search_index.add_meeting(self.config.vault_path, meeting_id, chunks)
+        logger.info("Busca: indexados %d trechos de '%s'.", len(chunks), meeting_id)
 
     def _summarize(self, transcript, paths, source_file, created_at, job, steps, style=None):
         """Etapas 3-6 (resumo/nota/kanban/wiki) sobre um transcript + pasta.
@@ -464,6 +498,9 @@ class MeetingPipeline:
             # o invariante "embeddings sempre batem com os rótulos do .words.json".
             from . import voiceprints
             voiceprints.remove_embeddings(meeting_dir)
+            # Re-indexar a busca (opt-in): o texto mudou, então os chunks antigos
+            # ficam obsoletos — _index_for_search os substitui (best-effort).
+            self._index_for_search(paths, transcript)
             detail = f"{len(transcript.segments)} segmentos, {format_duration(transcript.duration)}"
             job.complete(f"So transcricao | {detail}")
             self.dashboard.update(job)
