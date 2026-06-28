@@ -114,6 +114,46 @@ def test_transcribe_existing_removes_stale_embeddings(config, tmp_path, monkeypa
     assert not stale.exists()
 
 
+def test_transcribe_existing_reindexes_search(config, tmp_path, monkeypatch):
+    """Re-transcrição com busca ligada substitui os chunks antigos no índice."""
+    from meeting_processor import search_index as si
+    from meeting_processor.pipeline import MeetingPipeline
+
+    config.watch_dir = str(tmp_path / "watch")
+    config.enable_search_index = True
+    mid = _make_meeting(config, "reuniao.mp4")
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads" / "reuniao.mp4").write_bytes(b"fake")
+
+    # Índice "antigo" com texto que não existe mais na nova transcrição.
+    si.add_meeting(config.vault_path, mid, [
+        {"text": "texto antigo", "start": 0.0, "end": 1.0, "vector": [9.0, 9.0]},
+    ])
+
+    monkeypatch.setattr(
+        "meeting_processor.pipeline.extract_audio",
+        lambda src, cfg: tmp_path / "audio.wav",
+    )
+    (tmp_path / "audio.wav").write_bytes(b"x")
+    monkeypatch.setattr("meeting_processor.pipeline.ollama_service.embed",
+                        lambda text, cfg: [1.0, 0.0])
+
+    class _FakeTranscriber:
+        def __init__(self, *a, **k): ...
+        def transcribe(self, audio_path, progress_callback=None, **kwargs):
+            return Transcript(
+                segments=[TranscriptSegment(start=0.0, end=3.0, text="Texto novo.")],
+                full_text="Texto novo.", language="pt", duration=3.0,
+            )
+
+    monkeypatch.setattr("meeting_processor.pipeline.WhisperTranscriber", lambda cfg: _FakeTranscriber())
+
+    MeetingPipeline(config).transcribe_existing(mid)
+
+    rows = si.load_index(config.vault_path)
+    assert [r["text"] for r in rows] == ["Texto novo."]
+
+
 def test_transcribe_existing_no_source_logs_error(config, tmp_path):
     from meeting_processor import generation_log
     from meeting_processor.pipeline import MeetingPipeline

@@ -14,6 +14,33 @@ from .config import Settings
 logger = logging.getLogger(__name__)
 
 
+class EmbeddingError(RuntimeError):
+    """Falha tratável ao gerar embedding (Ollama off, modelo ausente, etc.)."""
+
+
+def embed(text: str, config: Settings) -> list[float]:
+    """Embedding de ``text`` via Ollama (``POST /api/embeddings``).
+
+    Levanta ``EmbeddingError`` quando o Ollama está off/inacessível ou a
+    resposta não traz um vetor — o chamador decide se loga e segue (indexação
+    best-effort) ou devolve erro amigável (busca).
+    """
+    base = config.ollama_base_url.rstrip("/")
+    try:
+        r = httpx.post(
+            f"{base}/api/embeddings",
+            json={"model": config.embedding_model, "prompt": text},
+            timeout=config.ollama_request_timeout,
+        )
+        r.raise_for_status()
+        vector = r.json().get("embedding")
+    except Exception as e:  # noqa: BLE001 — qualquer falha vira erro tratável
+        raise EmbeddingError(str(e)) from e
+    if not isinstance(vector, list) or not vector:
+        raise EmbeddingError("resposta do Ollama sem 'embedding'")
+    return [float(x) for x in vector]
+
+
 def is_running(base_url: str) -> bool:
     """True se o Ollama responde em ``{base_url}/api/tags``."""
     try:

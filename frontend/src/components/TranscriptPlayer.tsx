@@ -30,17 +30,25 @@ export function TranscriptPlayer({
   markdown,
   hasSource,
   words = null,
+  seekTo = null,
 }: {
   meetingId: string;
   markdown: string;
   hasSource: boolean;
   words?: WordSegment[] | null;
+  seekTo?: number | null;
 }) {
   const segments = parseTranscript(markdown);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeIdx, setActiveIdx] = useState(-1);
   const wlVideoRef = useRef<HTMLVideoElement>(null);
   const [wlTime, setWlTime] = useState(0);
+
+  // Deep-link da busca: posiciona o vídeo no trecho assim que os metadados
+  // carregam (currentTime só "pega" depois disso).
+  const seekOnLoad = (v: HTMLVideoElement | null) => {
+    if (v && seekTo != null && seekTo > 0) v.currentTime = seekTo;
+  };
 
   if (hasSource && words && words.length > 0) {
     const seekWord = (s: number) => {
@@ -50,6 +58,7 @@ export function TranscriptPlayer({
     return (
       <div className="flex flex-col gap-4">
         <video ref={wlVideoRef} controls preload="metadata"
+          onLoadedMetadata={() => seekOnLoad(wlVideoRef.current)}
           onTimeUpdate={() => setWlTime(wlVideoRef.current?.currentTime ?? 0)}
           src={`/api/meetings/${encodeURIComponent(meetingId)}/media`}
           className="w-full rounded-lg bg-black" />
@@ -100,6 +109,7 @@ export function TranscriptPlayer({
         ref={videoRef}
         controls
         preload="metadata"
+        onLoadedMetadata={() => seekOnLoad(videoRef.current)}
         onTimeUpdate={onTime}
         src={`/api/meetings/${encodeURIComponent(meetingId)}/media`}
         className="w-full rounded-lg bg-black"

@@ -37,6 +37,15 @@ describe("TranscriptPlayer", () => {
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   });
 
+  it("seeks to seekTo once the video metadata loads", () => {
+    const { container } = render(
+      <TranscriptPlayer meetingId="m1" markdown={"**[00:05]** oi\n**[00:10]** tchau"} hasSource seekTo={10} />,
+    );
+    const video = container.querySelector("video")!;
+    fireEvent(video, new Event("loadedmetadata"));
+    expect(video.currentTime).toBe(10);
+  });
+
   it("falls back to the plain transcript when there is no source", () => {
     const { container } = render(
       <TranscriptPlayer meetingId="m1" markdown={"**[00:05]** oi"} hasSource={false} />,

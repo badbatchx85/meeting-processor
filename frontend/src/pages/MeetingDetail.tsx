@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Sparkles, FileText, Trash2, Download, FileType, ExternalLink } from "lucide-react";
 import { Card } from "../components/Card";
 import { MarkdownView } from "../components/MarkdownView";
@@ -69,7 +69,11 @@ export function MeetingDetail() {
   useEffect(() => { if (config.data) setSummaryStyle(config.data.summary_style ?? "timeline"); }, [config.data]);
 
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("summary");
+  // Deep-link da busca: ?t=<segundos> abre direto na transcrição no trecho.
+  const [searchParams] = useSearchParams();
+  const tParam = searchParams.get("t");
+  const seekTo = tParam != null ? Number(tParam) : null;
+  const [tab, setTab] = useState<Tab>(seekTo != null && !Number.isNaN(seekTo) ? "transcript" : "summary");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const obsidianUri = `obsidian://open?path=${encodeURIComponent(id)}`;
@@ -204,7 +208,8 @@ export function MeetingDetail() {
             <SpeakerNames meetingId={id} />
             <TalkTime segments={words.data ?? []} />
             <TranscriptPlayer meetingId={id} markdown={d.transcricao_md}
-              hasSource={source.data?.exists ?? false} words={words.data ?? null} />
+              hasSource={source.data?.exists ?? false} words={words.data ?? null}
+              seekTo={seekTo != null && !Number.isNaN(seekTo) ? seekTo : null} />
           </>
         )}
         {tab === "tasks" && (

@@ -19,6 +19,9 @@ const Tasks = lazy(() =>
 const Settings = lazy(() =>
   import("./pages/Settings").then((m) => ({ default: m.Settings })),
 );
+const Search = lazy(() =>
+  import("./pages/Search").then((m) => ({ default: m.Search })),
+);
 
 export default function App() {
   return (
@@ -27,6 +30,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="meetings" element={<Meetings />} />
         <Route path="meetings/:id" element={<MeetingDetail />} />
+        <Route path="search" element={<Search />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="settings" element={<Settings />} />
       </Route>

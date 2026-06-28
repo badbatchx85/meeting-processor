@@ -1,5 +1,41 @@
 """Auto-start of the Ollama server when processing with the local provider."""
+import pytest
+
 import meeting_processor.ollama_service as svc
+
+
+def test_embed_parses_embedding(config, monkeypatch):
+    class _R:
+        status_code = 200
+
+        def json(self):
+            return {"embedding": [0.1, 0.2, 0.3]}
+
+        def raise_for_status(self):
+            pass
+
+    captured = {}
+
+    def _post(url, json=None, timeout=None):
+        captured["url"] = url
+        captured["json"] = json
+        return _R()
+
+    monkeypatch.setattr("httpx.post", _post)
+    config.embedding_model = "nomic-embed-text"
+    out = svc.embed("oi mundo", config)
+    assert out == [0.1, 0.2, 0.3]
+    assert captured["url"].endswith("/api/embeddings")
+    assert captured["json"] == {"model": "nomic-embed-text", "prompt": "oi mundo"}
+
+
+def test_embed_raises_when_ollama_off(config, monkeypatch):
+    def _boom(*a, **k):
+        raise RuntimeError("connrefused")
+
+    monkeypatch.setattr("httpx.post", _boom)
+    with pytest.raises(svc.EmbeddingError):
+        svc.embed("oi", config)
 
 
 def test_is_running_true_on_200(monkeypatch):

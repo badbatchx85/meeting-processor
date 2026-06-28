@@ -4,6 +4,7 @@ import { api, uploadFile } from "../api/client";
 import type {
   Health, Watcher, Llm, MeetingSummary, MeetingDetail, Task, Steps, StatusResponse, Config,
   HistoryEntry, LocalModels, PullStatus, GenerationLogEntry, SourceInfo, WordSegment,
+  SearchResult,
 } from "../api/types";
 
 export const useHealth = () =>
@@ -218,6 +219,19 @@ export function useTranscribeMeeting() {
       qc.invalidateQueries({ queryKey: ["history"] });
       qc.invalidateQueries({ queryKey: ["meeting-log", id] });
     },
+  });
+}
+
+export function useSearch() {
+  return useMutation({
+    mutationFn: (q: string) =>
+      api.post<{ results: SearchResult[] }>("/api/search", { q, k: 20 }),
+  });
+}
+
+export function useReindexSearch() {
+  return useMutation({
+    mutationFn: () => api.post<{ ok: boolean; indexed: number }>("/api/search/reindex"),
   });
 }
 

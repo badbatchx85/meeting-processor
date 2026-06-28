@@ -32,6 +32,8 @@ from fastapi.templating import Jinja2Templates
 from ..config import Settings, load_config
 from ..dashboard import STAGES
 from ..utils import yaml_unquote
+from .. import ollama_service
+from .. import search_index
 from .. import speaker_names
 from .. import voiceprints
 from . import meeting_export, spa_serving
@@ -326,6 +328,9 @@ def _delete_meeting(
     except OSError as e:
         logger.exception("Falha ao remover pasta da reunião")
         return {"ok": False, "error": f"Erro ao remover pasta: {e}"}
+
+    # 2b. Remove os chunks dessa reunião do índice de busca (se houver).
+    search_index.remove_meeting(vault_path, meeting_id)
 
     # 3. Limpa referências em index.md / hot.md
     cleaned_refs: list[str] = []
@@ -1350,6 +1355,55 @@ def create_app(config: Settings | None = None) -> FastAPI:
         except Exception:  # noqa: BLE001 — enrollment não pode derrubar o save
             logger.warning("Falha ao matricular voiceprints", exc_info=True)
         return {"ok": True}
+
+    @app.post("/api/search")
+    async def api_search(payload: dict):
+        """Busca semântica: embeda a query e devolve os trechos mais próximos."""
+        q = ((payload or {}).get("q") or "").strip()
+        k = int((payload or {}).get("k") or 10)
+        if not q:
+            return {"results": []}
+        try:
+            query_vec = ollama_service.embed(q, config)
+        except ollama_service.EmbeddingError as e:
+            raise HTTPException(
+                status_code=503,
+                detail="Busca indisponível: Ollama não está acessível para gerar "
+                       f"o embedding ({e}). Inicie o Ollama e tente de novo.",
+            ) from e
+        rows = search_index.load_index(config.vault_path)
+        results = search_index.query(rows, query_vec, k=k, min_score=0.0)
+        return {"results": results}
+
+    @app.post("/api/search/reindex")
+    async def api_search_reindex():
+        """Reindexa todas as reuniões a partir dos sidecars .words.json."""
+        meetings = _list_meetings(config.vault_path)
+        indexed = 0
+        for m in meetings:
+            meeting_dir = _reunioes_dir(config.vault_path, m["id"])
+            if meeting_dir is None:
+                continue
+            hits = list(meeting_dir.glob("Transcricao - *.words.json"))
+            if not hits:
+                continue
+            try:
+                segments = json.loads(hits[0].read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            chunks = search_index.chunk_segments(segments)
+            try:
+                for ch in chunks:
+                    ch["vector"] = ollama_service.embed(ch["text"], config)
+            except ollama_service.EmbeddingError as e:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Reindexação interrompida: Ollama não está acessível "
+                           f"({e}). Inicie o Ollama e tente de novo.",
+                ) from e
+            search_index.add_meeting(config.vault_path, m["id"], chunks)
+            indexed += 1
+        return {"ok": True, "indexed": indexed}
 
     @app.delete("/api/meetings/{meeting_id}/source")
     async def api_delete_meeting_source(meeting_id: str):

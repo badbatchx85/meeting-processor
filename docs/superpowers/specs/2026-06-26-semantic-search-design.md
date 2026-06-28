@@ -1,7 +1,7 @@
 # Busca semântica sobre transcrições (v1)
 
 **Data:** 2026-06-26
-**Status:** design aprovado (aguardando review do spec)
+**Status:** implementado (TDD) — backend + frontend + testes verdes
 **Sub-projeto:** #4 do roadmap (v1 = busca; chat/RAG fica para depois)
 
 ## Problema
