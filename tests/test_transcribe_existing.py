@@ -166,6 +166,33 @@ def test_transcribe_existing_no_source_logs_error(config, tmp_path):
     assert "não encontrado" in entries[0]["error"]
 
 
+def test_summarize_existing_skips_audio_and_transcription(config, monkeypatch):
+    """Resumo-só não reprocessa: áudio/transcrição entram como 'skipped' (não 'done'),
+    para o stepper não dar a impressão de que está re-transcrevendo."""
+    from meeting_processor.models import MeetingSummary
+    from meeting_processor.pipeline import MeetingPipeline
+
+    mid = _make_meeting(config, "reuniao.mp4")
+
+    class _FakeSummarizer:
+        def __init__(self, *a, **k): ...
+        def summarize(self, transcript, source_filename, style=None):
+            return MeetingSummary(
+                executive_summary="ok", time_windows=[], action_items=[],
+                participants=[], key_topics=[],
+            )
+
+    monkeypatch.setattr("meeting_processor.pipeline.MeetingSummarizer", lambda cfg: _FakeSummarizer())
+    pipe = MeetingPipeline(config)
+    pipe.summarize_existing(mid)
+
+    job = pipe.dashboard.jobs[-1]
+    assert "audio" in job.skipped
+    assert "transcription" in job.skipped
+    # A etapa de resumo realmente rodou (não ficou pulada).
+    assert "summary" not in job.skipped
+
+
 def test_summarize_existing_appends_log(config, tmp_path, monkeypatch):
     from meeting_processor import generation_log
     from meeting_processor.models import ActionItem, MeetingSummary

@@ -423,9 +423,11 @@ class MeetingPipeline:
             "wiki": self.config.enable_wiki,
         }
         job = self.dashboard.new_job(meeting_id, started_at=job_started)
+        # Resumo-só: áudio e transcrição já existem. Marca como puladas (não
+        # "concluídas agora") para o stepper deixar claro que NÃO estamos
+        # re-extraindo áudio nem re-transcrevendo — só resumindo o texto.
         for key in ("audio", "transcription"):
-            job.advance(key)
-            job.set_progress(key, 100)
+            job.skip(key, detail="já concluída")
         started = datetime.now()
         try:
             self._check_cancel()

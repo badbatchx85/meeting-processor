@@ -37,4 +37,24 @@ describe("ProcessingStepper", () => {
     expect(screen.getByText(/50%/)).toBeInTheDocument();
     expect(screen.getByText(/120 segmentos/)).toBeInTheDocument();
   });
+
+  it("shows a skipped stage's own detail (e.g. 'já concluída') instead of '(desativada)'", () => {
+    const summaryOnly: JobProgress = {
+      ...job,
+      stages: [
+        { key: "audio", label: "Extraindo audio", state: "skipped", percent: 0, detail: "já concluída" },
+        { key: "transcription", label: "Transcrevendo com Whisper", state: "skipped", percent: 0, detail: "já concluída" },
+        { key: "summary", label: "Gerando resumo com LLM", state: "active", percent: 30, detail: "" },
+      ],
+    };
+    render(<ProcessingStepper job={summaryOnly} />);
+    // The prerequisite stages read as already-done, not "disabled".
+    expect(screen.getAllByText(/já concluída/).length).toBe(2);
+    expect(screen.queryByText(/desativada/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to '(desativada)' for a skipped stage with no detail", () => {
+    render(<ProcessingStepper job={job} />);
+    expect(screen.getByText(/Criando quadro Kanban/)).toHaveTextContent("desativada");
+  });
 });
