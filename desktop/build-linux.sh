@@ -26,8 +26,11 @@ LOCK="$DESKTOP/requirements-linux.lock"
 PY_URL="https://github.com/indygreg/python-build-standalone/releases/download/20240814/cpython-3.11.9+20240814-x86_64-unknown-linux-gnu-install_only.tar.gz"
 PY_SHA="9a332ba354f3b4e8a96a15db6b2805a7a31dcc1b6b9c1b7b93e5246949fbb50f"
 # Static ffmpeg from BtbN/FFmpeg-Builds (GitHub-hosted, reproducible CI builds).
+# NB: the `latest` tag is a ROLLING release — BtbN periodically rebuilds it, so
+# this SHA must be refreshed whenever the upstream artifact changes (the build
+# fails closed on mismatch). Refresh: curl the URL and `sha256sum` the file.
 FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz"
-FFMPEG_SHA="d86cd6d95b497ac3bbaa643b5e2202ff08b6a527415c19fabee05e12628eccfb"
+FFMPEG_SHA="f34a010a021a451a64f784d09874a27d52d3472a1a427a8d6a28b645178ded0b"
 LD_URL="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
 LD_SHA="514d4ffe2a2f757369b41863a4f63fbbb222c429652803ebc081cb16ba21ac25"
 LDP_URL="https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
