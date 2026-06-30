@@ -39,7 +39,7 @@ export function ProcessingStepper({ job }: { job: JobProgress }) {
                 }
               >
                 {s.label}
-                {s.state === "skipped" && " (desativada)"}
+                {s.state === "skipped" && ` (${s.detail || "desativada"})`}
               </span>
             </div>
             {s.state === "active" && (
